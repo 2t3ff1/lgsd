@@ -6,11 +6,14 @@ import {
   deleteTodo,
   markTodoDone,
   requestProof,
+  requestShift,
+  resolveShift,
   uploadProof,
 } from "@/app/actions/todos";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Textarea } from "@/components/ui/Input";
+import { Textarea, Input, Label } from "@/components/ui/Input";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PointsPopup } from "@/components/PointsPopup";
 import { cn } from "@/lib/utils";
 import type { Todo, TodoConfirmation, TodoProof } from "@/types/database";
@@ -38,6 +41,10 @@ export function TodoItem({
   const [showProofRequest, setShowProofRequest] = useState(false);
   const [comment, setComment] = useState("");
   const [points, setPoints] = useState<number | null>(null);
+  const [showShiftModal, setShowShiftModal] = useState(false);
+  const [shiftDate, setShiftDate] = useState(todo.date);
+  const [shiftReason, setShiftReason] = useState("");
+  const [shiftError, setShiftError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function handleMarkDone() {
@@ -79,17 +86,44 @@ export function TodoItem({
     });
   }
 
+  function handleRequestShift() {
+    if (!shiftDate || !shiftReason.trim()) {
+      setShiftError("Bitte Datum und Grund angeben.");
+      return;
+    }
+    setShiftError(null);
+    startTransition(async () => {
+      const res = await requestShift(workspaceId, todo.id, shiftDate, shiftReason.trim());
+      if (res?.error) {
+        setShiftError(res.error);
+        return;
+      }
+      setShowShiftModal(false);
+      setShiftReason("");
+    });
+  }
+
+  function handleResolveShift(decision: "approve_no_penalty" | "approve_with_penalty" | "reject") {
+    startTransition(async () => {
+      await resolveShift(workspaceId, todo.id, decision);
+    });
+  }
+
   const isPendingForOthers = todo.status === "pending" && !isOwn;
+  const shiftLimitReached = todo.shift_count >= 3;
+  const shiftPending = todo.shift_request_status === "pending";
+  const nextPenalty = [3, 6, 10][Math.min(todo.shift_count, 2)];
 
   return (
     <div
       className={cn(
-        "relative space-y-2 rounded-xl border-2 bg-white p-3 transition-colors",
-        todo.status === "confirmed" && "border-success-500/40 bg-success-100/30",
-        todo.status === "missed" && "border-danger-500/30 bg-danger-100/30",
-        todo.status === "rejected" && "border-accent-400/50 bg-accent-50",
-        todo.status === "pending" && "border-primary-200",
-        todo.status === "open" && "border-primary-100",
+        "relative space-y-2 rounded-xl border-2 bg-surface p-3 transition-colors",
+        todo.status === "confirmed" && "border-success-500/40 bg-success-100/30 dark:bg-success-500/10",
+        todo.status === "missed" && "border-danger-500/30 bg-danger-100/30 dark:bg-danger-500/10",
+        todo.status === "rejected" && "border-accent-400/50 bg-accent-50 dark:bg-accent-500/10",
+        todo.status === "pending" && "border-primary-200 dark:border-primary-300/30",
+        todo.status === "open" && "border-border-subtle",
+        todo.shift_auto_approved && "border-amber-400/60 bg-amber-50 dark:bg-amber-500/10",
         isPendingForOthers && "animate-pulse-ring"
       )}
     >
@@ -140,12 +174,54 @@ export function TodoItem({
         {todo.status === "confirmed" && <Badge tone="success">Bestätigt ✅</Badge>}
         {todo.status === "rejected" && <Badge tone="accent">Beweis angefordert ❌</Badge>}
         {todo.status === "missed" && <Badge tone="danger">Verpasst (-5)</Badge>}
+        {todo.shift_auto_approved && (
+          <Badge tone="amber">⚠️ Automatisch verschoben (ohne Genehmigung)</Badge>
+        )}
+        {shiftPending && <Badge tone="amber">📅 Verschiebung beantragt</Badge>}
       </div>
 
       {lastConfirmation?.action === "requested_proof" && lastConfirmation.comment && (
-        <p className="rounded-lg bg-accent-100 px-2 py-1.5 text-xs text-accent-700">
+        <p className="rounded-lg bg-accent-100 px-2 py-1.5 text-xs text-accent-700 dark:bg-accent-500/20 dark:text-accent-300">
           💬 {lastConfirmation.comment}
         </p>
+      )}
+
+      {shiftPending && (
+        <div className="space-y-2 rounded-lg bg-amber-100 px-2.5 py-2 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+          <p>
+            📅 Verschiebung auf <strong>{todo.shift_request_date}</strong> beantragt.
+          </p>
+          {todo.shift_request_reason && <p>Grund: {todo.shift_request_reason}</p>}
+          {!isOwn && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleResolveShift("approve_no_penalty")}
+                disabled={pending}
+              >
+                Verschieben ohne Punktabzug
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleResolveShift("approve_with_penalty")}
+                disabled={pending}
+              >
+                Verschieben mit Punktabzug (-{nextPenalty})
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-danger-500"
+                onClick={() => handleResolveShift("reject")}
+                disabled={pending}
+              >
+                Ablehnen
+              </Button>
+            </div>
+          )}
+        </div>
       )}
 
       {proof && (
@@ -166,7 +242,7 @@ export function TodoItem({
             ref={fileRef}
             type="file"
             accept="image/*,application/pdf"
-            className="block w-full text-xs text-ink-light file:mr-2 file:rounded-lg file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-primary-600"
+            className="block w-full text-xs text-ink-light file:mr-2 file:rounded-lg file:border-0 file:bg-surface-muted file:px-2 file:py-1 file:text-xs file:font-semibold file:text-primary-600"
           />
           <Button size="sm" onClick={handleMarkDone} disabled={pending} className="w-full">
             ✓ Ich bin fertig
@@ -181,7 +257,7 @@ export function TodoItem({
             ref={fileRef}
             type="file"
             accept="image/*,application/pdf"
-            className="block w-full text-xs text-ink-light file:mr-2 file:rounded-lg file:border-0 file:bg-primary-50 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-primary-600"
+            className="block w-full text-xs text-ink-light file:mr-2 file:rounded-lg file:border-0 file:bg-surface-muted file:px-2 file:py-1 file:text-xs file:font-semibold file:text-primary-600"
           />
           <Button size="sm" onClick={handleUploadProof} disabled={pending} className="w-full">
             📎 Beweis hochladen
@@ -234,6 +310,58 @@ export function TodoItem({
           Nachträglich bestätigen
         </Button>
       )}
+
+      {/* Eigene Aufgabe: Verschiebung beantragen */}
+      {isOwn && todo.status !== "confirmed" && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="w-full"
+          onClick={() => {
+            setShiftDate(todo.date);
+            setShiftError(null);
+            setShowShiftModal(true);
+          }}
+          disabled={pending || shiftLimitReached || shiftPending}
+          title={shiftLimitReached ? "Maximale Anzahl an Verschiebungen erreicht" : undefined}
+        >
+          📅 Verschieben {shiftLimitReached ? "(Limit erreicht)" : `(${todo.shift_count}/3)`}
+        </Button>
+      )}
+
+      <ConfirmDialog
+        open={showShiftModal}
+        title="Aufgabe verschieben"
+        description="Wähle ein neues Datum und gib einen Grund für die Verschiebung an."
+        confirmLabel="Antrag stellen"
+        confirmVariant="primary"
+        loading={pending}
+        onConfirm={handleRequestShift}
+        onCancel={() => setShowShiftModal(false)}
+      >
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor={`shift-date-${todo.id}`}>Neues Datum</Label>
+            <Input
+              id={`shift-date-${todo.id}`}
+              type="date"
+              value={shiftDate}
+              onChange={(e) => setShiftDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor={`shift-reason-${todo.id}`}>Grund für die Verschiebung</Label>
+            <Textarea
+              id={`shift-reason-${todo.id}`}
+              rows={2}
+              value={shiftReason}
+              onChange={(e) => setShiftReason(e.target.value)}
+              placeholder="z.B. Termin verschoben, krank, …"
+            />
+          </div>
+          {shiftError && <p className="text-sm font-medium text-danger-600">{shiftError}</p>}
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

@@ -17,7 +17,7 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="w-full rounded-xl border-2 border-dashed border-primary-200 py-2.5 text-sm font-bold text-primary-600 transition-colors hover:bg-primary-50"
+        className="w-full rounded-xl border-2 border-dashed border-primary-200 py-2.5 text-sm font-bold text-primary-600 transition-colors hover:bg-surface-muted dark:border-primary-300/20 dark:text-primary-300"
       >
         + Aufgabe hinzufügen
       </button>
@@ -41,7 +41,7 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
         setLoading(false);
         setOpen(false);
       }}
-      className="space-y-2 rounded-xl border-2 border-primary-100 bg-primary-50/40 p-3"
+      className="space-y-2 rounded-xl border-2 border-border-subtle bg-surface-muted p-3"
     >
       <div>
         <Label htmlFor={`title-${workspaceId}`}>Aufgabe</Label>
@@ -72,7 +72,7 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
         <select
           name="recurrence_type"
           defaultValue="daily"
-          className="w-full rounded-xl border-2 border-primary-100 bg-white px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
+          className="w-full rounded-xl border-2 border-border-subtle bg-surface px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
         >
           <option value="daily">Täglich</option>
           <option value="weekly">Wöchentlich</option>

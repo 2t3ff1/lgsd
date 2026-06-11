@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -9,11 +10,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "#FBF6EE",
-        surface: "#FFFFFF",
+        background: "var(--background)",
+        surface: "var(--surface)",
+        "surface-muted": "var(--surface-muted)",
+        "border-subtle": "var(--border-subtle)",
         ink: {
-          DEFAULT: "#241E33",
-          light: "#6B6478",
+          DEFAULT: "var(--ink)",
+          light: "var(--ink-light)",
         },
         primary: {
           50: "#F0EEFE",

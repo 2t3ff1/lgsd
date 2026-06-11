@@ -5,11 +5,27 @@
 :root {
   --background: #fbf6ee;
   --foreground: #241e33;
+  --surface: #ffffff;
+  --surface-muted: #f0eefe;
+  --border-subtle: rgba(224, 220, 253, 0.6);
+  --ink: #241e33;
+  --ink-light: #6b6478;
+}
+
+.dark {
+  --background: #15131f;
+  --foreground: #ede9fb;
+  --surface: #211e30;
+  --surface-muted: #2a263b;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --ink: #ede9fb;
+  --ink-light: #a39cc0;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 @layer utilities {

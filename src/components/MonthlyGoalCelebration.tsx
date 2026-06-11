@@ -34,7 +34,7 @@ export function MonthlyGoalCelebration({
         <p className="text-ink-light">
           Du hast dein Monatsziel geschafft. Zeit für deine Belohnung:
         </p>
-        <p className="rounded-xl bg-accent-100 px-4 py-3 font-bold text-accent-700">
+        <p className="rounded-xl bg-accent-100 px-4 py-3 font-bold text-accent-700 dark:bg-accent-500/20 dark:text-accent-300">
           {rewardText}
         </p>
         <Button onClick={() => setShow(false)} className="w-full">

@@ -31,7 +31,7 @@ export function MemberTile({
     <div
       className={cn(
         "flex h-full flex-col gap-4 rounded-2xl border-2 bg-surface p-4 shadow-soft",
-        isOwn ? "border-primary-400 ring-2 ring-primary-100" : "border-primary-100/60"
+        isOwn ? "border-primary-400 ring-2 ring-primary-100 dark:ring-primary-500/20" : "border-border-subtle"
       )}
     >
       <div className="flex items-center gap-3">
@@ -55,7 +55,7 @@ export function MemberTile({
           {isOwn ? "Heute" : "Heute"}
         </p>
         {todos.length === 0 ? (
-          <p className="rounded-xl bg-primary-50/50 px-3 py-4 text-center text-sm text-ink-light">
+          <p className="rounded-xl bg-surface-muted px-3 py-4 text-center text-sm text-ink-light">
             Keine Aufgaben für heute 🎉
           </p>
         ) : (

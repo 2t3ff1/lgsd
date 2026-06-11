@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { InviteMemberForm } from "@/components/InviteMemberForm";
 import { WorkspaceSettingsForm } from "@/components/WorkspaceSettingsForm";
 import { cancelInvite, leaveWorkspace, removeMember } from "@/app/actions/workspaces";
+import { DeleteWorkspaceButton } from "@/components/DeleteWorkspaceButton";
 import type { Profile } from "@/types/database";
 
 export default async function WorkspaceSettingsPage({ params }: { params: { id: string } }) {
@@ -68,7 +69,7 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
               const p = m.profiles as unknown as Profile;
               if (!p) return null;
               return (
-                <li key={m.user_id} className="flex items-center gap-3 rounded-xl bg-primary-50/50 p-2.5">
+                <li key={m.user_id} className="flex items-center gap-3 rounded-xl bg-surface-muted p-2.5">
                   <Avatar name={p.display_name} url={p.avatar_url} size="sm" />
                   <span className="flex-1 truncate font-semibold">
                     {p.display_name}
@@ -105,7 +106,7 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
                 {(invites ?? []).map((inv) => (
                   <li
                     key={inv.id}
-                    className="flex items-center justify-between rounded-xl bg-primary-50/50 px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-xl bg-surface-muted px-3 py-2 text-sm"
                   >
                     <span>{inv.invited_email}</span>
                     <form action={async () => cancelInvite(workspace.id, inv.id)}>
@@ -131,6 +132,17 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
                 Workspace verlassen
               </Button>
             </form>
+          </Card>
+        )}
+
+        {isOwner && (
+          <Card className="rounded-2xl border-danger-200">
+            <h2 className="mb-2 font-bold text-danger-600">Workspace löschen</h2>
+            <p className="mb-3 text-sm text-ink-light">
+              Der Workspace und alle zugehörigen Aufgaben, Punkte und Daten werden unwiderruflich
+              gelöscht.
+            </p>
+            <DeleteWorkspaceButton workspaceId={workspace.id} />
           </Card>
         )}
       </main>

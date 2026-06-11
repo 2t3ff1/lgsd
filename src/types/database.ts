@@ -1,6 +1,7 @@
 export type TodoStatus = "open" | "pending" | "confirmed" | "rejected" | "missed";
 export type RecurrenceType = "daily" | "weekly" | "monthly";
 export type ConfirmationAction = "confirmed" | "requested_proof";
+export type ShiftRequestStatus = "none" | "pending" | "approved" | "rejected";
 
 export interface Profile {
   id: string;
@@ -44,6 +45,11 @@ export interface Todo {
   recurrence_parent_id: string | null;
   status: TodoStatus;
   penalized: boolean;
+  shift_count: number;
+  shift_request_date: string | null;
+  shift_request_reason: string | null;
+  shift_request_status: ShiftRequestStatus;
+  shift_auto_approved: boolean;
   created_at: string;
 }
 

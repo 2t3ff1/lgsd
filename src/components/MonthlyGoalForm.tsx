@@ -21,7 +21,7 @@ export function MonthlyGoalForm({
   const [loading, setLoading] = useState(false);
 
   return (
-    <div className="space-y-3 rounded-xl border-2 border-primary-100 p-3">
+    <div className="space-y-3 rounded-xl border-2 border-border-subtle p-3">
       <div className="flex items-center justify-between">
         <p className="font-bold">{workspace.name}</p>
         {goal?.achieved && <span className="text-sm font-bold text-success-600">🎉 Erreicht!</span>}

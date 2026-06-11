@@ -22,7 +22,7 @@ export function Leaderboard({
             key={entry.profile.id}
             className={cn(
               "flex items-center gap-3 rounded-xl px-3 py-2",
-              entry.isOwn ? "bg-primary-50" : ""
+              entry.isOwn ? "bg-surface-muted" : ""
             )}
           >
             <span className="w-6 text-center font-bold text-ink-light">

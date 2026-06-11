@@ -20,7 +20,7 @@ export function WeeklyGoals({ workspaceId, goals }: { workspaceId: string; goals
         {goals.map((g) => (
           <li
             key={g.id}
-            className="flex items-center justify-between gap-2 rounded-lg bg-primary-50 px-2.5 py-1.5 text-sm"
+            className="flex items-center justify-between gap-2 rounded-lg bg-surface-muted px-2.5 py-1.5 text-sm"
           >
             <span>🎯 {g.title}</span>
             <button

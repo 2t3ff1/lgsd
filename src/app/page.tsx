@@ -23,7 +23,7 @@ export default function LandingPage() {
       <main className="mx-auto max-w-6xl px-6">
         <section className="relative grid grid-cols-1 items-center gap-10 py-12 md:grid-cols-2 md:py-20">
           <div className="relative z-10">
-            <span className="inline-block rounded-full bg-accent-100 px-4 py-1.5 text-sm font-bold text-accent-600">
+            <span className="inline-block rounded-full bg-accent-100 px-4 py-1.5 text-sm font-bold text-accent-600 dark:bg-accent-500/20 dark:text-accent-300">
               Schluss mit leeren Versprechen 💪
             </span>
             <h1 className="mt-5 text-4xl font-extrabold leading-tight text-ink sm:text-5xl md:text-6xl">
@@ -48,8 +48,8 @@ export default function LandingPage() {
           </div>
 
           <div className="relative z-10 hidden md:block">
-            <div className="absolute -top-10 -right-6 h-40 w-40 rounded-full bg-accent-100 blur-2xl" />
-            <div className="absolute -bottom-10 left-10 h-48 w-48 rounded-full bg-primary-100 blur-2xl" />
+            <div className="absolute -top-10 -right-6 h-40 w-40 rounded-full bg-accent-100 blur-2xl dark:bg-accent-500/20" />
+            <div className="absolute -bottom-10 left-10 h-48 w-48 rounded-full bg-primary-100 blur-2xl dark:bg-primary-500/20" />
             <Card className="relative animate-pop-in space-y-3 rounded-3xl">
               <div className="flex items-center justify-between">
                 <p className="font-bold">Heute</p>
@@ -62,7 +62,7 @@ export default function LandingPage() {
               ].map((t) => (
                 <div
                   key={t.title}
-                  className="flex items-center gap-3 rounded-xl border border-primary-100 bg-white p-3"
+                  className="flex items-center gap-3 rounded-xl border border-border-subtle bg-surface p-3"
                 >
                   <span
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
@@ -76,7 +76,7 @@ export default function LandingPage() {
                   </span>
                 </div>
               ))}
-              <div className="flex items-center justify-between rounded-xl bg-primary-50 p-3">
+              <div className="flex items-center justify-between rounded-xl bg-surface-muted p-3">
                 <span className="text-sm font-semibold">Monatsziel: Neue Sneakers</span>
                 <span className="text-sm font-bold text-primary-600">140 / 200 ⭐</span>
               </div>

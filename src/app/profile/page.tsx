@@ -124,7 +124,7 @@ export default async function ProfilePage() {
                 return (
                   <li
                     key={p.id}
-                    className="flex items-center justify-between gap-2 rounded-xl bg-primary-50/50 px-3 py-2 text-sm"
+                    className="flex items-center justify-between gap-2 rounded-xl bg-surface-muted px-3 py-2 text-sm"
                   >
                     <div className="flex items-center gap-2">
                       <span>{meta.emoji}</span>

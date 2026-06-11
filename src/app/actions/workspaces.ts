@@ -115,3 +115,30 @@ export async function leaveWorkspace(workspaceId: string) {
   revalidatePath("/dashboard");
   redirect("/dashboard");
 }
+
+export async function deleteWorkspace(workspaceId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: workspace } = await supabase
+    .from("workspaces")
+    .select("created_by")
+    .eq("id", workspaceId)
+    .maybeSingle();
+
+  if (!workspace || workspace.created_by !== user.id) {
+    return { error: "Nur der Ersteller kann diesen Workspace löschen." };
+  }
+
+  const { error } = await supabase.from("workspaces").delete().eq("id", workspaceId);
+
+  if (error) {
+    return { error: "Workspace konnte nicht gelöscht werden." };
+  }
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}

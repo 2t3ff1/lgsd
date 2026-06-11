@@ -15,7 +15,7 @@ export function CreateWorkspaceCard() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary-200 bg-primary-50/40 text-primary-600 transition-colors hover:bg-primary-50"
+        className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary-200 bg-surface-muted text-primary-600 transition-colors hover:bg-primary-50 dark:border-primary-300/20 dark:text-primary-300 dark:hover:bg-surface"
       >
         <span className="text-3xl">+</span>
         <span className="font-bold">Neuer Workspace</span>

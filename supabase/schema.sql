@@ -104,7 +104,7 @@ alter table public.workspace_invites enable row level security;
 create policy "Workspaces: Mitglieder koennen lesen"
   on public.workspaces for select
   to authenticated
-  using (public.is_workspace_member(id, auth.uid()));
+  using (created_by = auth.uid() or public.is_workspace_member(id, auth.uid()));
 
 create policy "Workspaces: eingeloggte Nutzer koennen erstellen"
   on public.workspaces for insert
@@ -224,6 +224,11 @@ create table public.todos (
   recurrence_parent_id uuid references public.todos (id) on delete set null,
   status text not null default 'open' check (status in ('open', 'pending', 'confirmed', 'rejected', 'missed')),
   penalized boolean not null default false,
+  shift_count integer not null default 0,
+  shift_request_date date,
+  shift_request_reason text,
+  shift_request_status text not null default 'none' check (shift_request_status in ('none', 'pending', 'approved', 'rejected')),
+  shift_auto_approved boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -539,7 +544,7 @@ begin
     raise exception 'Todo kann in diesem Status nicht abgeschlossen werden';
   end if;
 
-  update public.todos set status = 'pending' where id = _todo_id;
+  update public.todos set status = 'pending', shift_auto_approved = false where id = _todo_id;
 end;
 $$;
 
@@ -624,6 +629,101 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
+-- AUFGABE VERSCHIEBEN (Antragssystem)
+-- ----------------------------------------------------------------------------
+
+-- Eigentuemer beantragt eine Verschiebung der Aufgabe auf ein neues Datum.
+-- Max. 3 Verschiebungen pro Aufgabe.
+create or replace function public.request_todo_shift(_todo_id uuid, _new_date date, _reason text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  _todo public.todos;
+begin
+  select * into _todo from public.todos where id = _todo_id;
+
+  if _todo is null or _todo.user_id <> auth.uid() then
+    raise exception 'Nicht erlaubt';
+  end if;
+
+  if _todo.shift_count >= 3 then
+    raise exception 'Maximale Anzahl an Verschiebungen erreicht';
+  end if;
+
+  if _todo.shift_request_status = 'pending' then
+    raise exception 'Es liegt bereits ein Verschiebungsantrag vor';
+  end if;
+
+  if _new_date is null or trim(coalesce(_reason, '')) = '' then
+    raise exception 'Bitte Datum und Grund angeben';
+  end if;
+
+  update public.todos
+  set shift_request_date = _new_date,
+      shift_request_reason = _reason,
+      shift_request_status = 'pending'
+  where id = _todo_id;
+end;
+$$;
+
+-- Workspace-Mitglied entscheidet ueber einen Verschiebungsantrag.
+-- _decision: 'approve_no_penalty' | 'approve_with_penalty' | 'reject'
+create or replace function public.resolve_todo_shift(_todo_id uuid, _decision text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  _todo public.todos;
+  _penalties integer[] := array[3, 6, 10];
+  _penalty integer;
+begin
+  select * into _todo from public.todos where id = _todo_id;
+
+  if _todo is null then
+    raise exception 'Todo nicht gefunden';
+  end if;
+
+  if not public.is_workspace_member(_todo.workspace_id, auth.uid()) then
+    raise exception 'Nicht erlaubt';
+  end if;
+
+  if _todo.shift_request_status <> 'pending' then
+    raise exception 'Kein offener Verschiebungsantrag';
+  end if;
+
+  if _decision = 'reject' then
+    update public.todos
+    set shift_request_status = 'none',
+        shift_request_date = null,
+        shift_request_reason = null
+    where id = _todo_id;
+    return;
+  end if;
+
+  if _decision not in ('approve_no_penalty', 'approve_with_penalty') then
+    raise exception 'Ungueltige Entscheidung';
+  end if;
+
+  update public.todos
+  set date = _todo.shift_request_date,
+      shift_count = _todo.shift_count + 1,
+      shift_request_status = 'none',
+      shift_request_date = null,
+      shift_request_reason = null,
+      shift_auto_approved = false
+  where id = _todo_id;
+
+  if _decision = 'approve_with_penalty' then
+    _penalty := _penalties[least(_todo.shift_count + 1, 3)];
+    perform public.award_points(_todo.user_id, _todo.workspace_id, _todo.id, -_penalty, 'shift_penalty');
+  end if;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
 -- MITTERNACHTS-JOB: Strafpunkte fuer verpasste Todos + wiederkehrende Todos erzeugen
 -- ----------------------------------------------------------------------------
 create or replace function public.run_daily_maintenance()
@@ -635,7 +735,24 @@ declare
   _todo record;
   _next_date date;
 begin
-  -- 1. Strafpunkte fuer offene/ueberfaellige Todos vergeben
+  -- 1. Offene Verschiebungsantraege, die bis Mitternacht nicht entschieden wurden,
+  --    automatisch verschieben (ohne Punktabzug) und amber markieren.
+  for _todo in
+    select * from public.todos
+    where shift_request_status = 'pending'
+      and date < current_date
+  loop
+    update public.todos
+    set date = coalesce(_todo.shift_request_date, _todo.date + interval '1 day'),
+        shift_count = _todo.shift_count + 1,
+        shift_request_status = 'none',
+        shift_request_date = null,
+        shift_request_reason = null,
+        shift_auto_approved = true
+    where id = _todo.id;
+  end loop;
+
+  -- 2. Strafpunkte fuer offene/ueberfaellige Todos vergeben
   for _todo in
     select * from public.todos
     where date < current_date
@@ -653,7 +770,7 @@ begin
       and (last_active_date is null or last_active_date < _todo.date);
   end loop;
 
-  -- 2. Naechste Instanz wiederkehrender Todos erzeugen
+  -- 3. Naechste Instanz wiederkehrender Todos erzeugen
   for _todo in
     select * from public.todos
     where is_recurring = true

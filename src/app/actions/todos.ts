@@ -118,6 +118,46 @@ export async function confirmTodo(workspaceId: string, todoId: string, comment?:
   return { success: true };
 }
 
+export async function requestShift(
+  workspaceId: string,
+  todoId: string,
+  newDate: string,
+  reason: string
+) {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("request_todo_shift", {
+    _todo_id: todoId,
+    _new_date: newDate,
+    _reason: reason,
+  });
+
+  if (error) {
+    return { error: "Verschiebungsantrag konnte nicht gestellt werden." };
+  }
+
+  revalidatePath(`/workspace/${workspaceId}`);
+  return { success: true };
+}
+
+export async function resolveShift(
+  workspaceId: string,
+  todoId: string,
+  decision: "approve_no_penalty" | "approve_with_penalty" | "reject"
+) {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("resolve_todo_shift", {
+    _todo_id: todoId,
+    _decision: decision,
+  });
+
+  if (error) {
+    return { error: "Verschiebungsantrag konnte nicht bearbeitet werden." };
+  }
+
+  revalidatePath(`/workspace/${workspaceId}`);
+  return { success: true };
+}
+
 export async function requestProof(workspaceId: string, todoId: string, comment: string) {
   const supabase = createClient();
   const { error } = await supabase.rpc("request_todo_proof", {
