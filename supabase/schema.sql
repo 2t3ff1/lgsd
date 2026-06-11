@@ -1,0 +1,707 @@
+-- ============================================================================
+-- LGSD - Let's Get Shit Done
+-- Supabase Schema, RLS Policies, Functions & Triggers
+-- ============================================================================
+-- Run this once in the Supabase SQL editor (Project > SQL Editor > New query)
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- EXTENSIONS
+-- ----------------------------------------------------------------------------
+create extension if not exists "uuid-ossp";
+create extension if not exists pg_cron with schema extensions;
+
+-- ----------------------------------------------------------------------------
+-- PROFILES (extends auth.users)
+-- ----------------------------------------------------------------------------
+create table public.profiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  display_name text not null default 'Nutzer',
+  avatar_url text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+
+create policy "Profiles: jeder eingeloggte Nutzer kann lesen"
+  on public.profiles for select
+  to authenticated
+  using (true);
+
+create policy "Profiles: Nutzer kann eigenes Profil bearbeiten"
+  on public.profiles for update
+  to authenticated
+  using (auth.uid() = id);
+
+-- Automatisch Profil anlegen, wenn ein neuer Auth-User erstellt wird
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, display_name, avatar_url)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1)),
+    new.raw_user_meta_data ->> 'avatar_url'
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- ----------------------------------------------------------------------------
+-- WORKSPACES
+-- ----------------------------------------------------------------------------
+create table public.workspaces (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  description text,
+  created_by uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create table public.workspace_members (
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (workspace_id, user_id)
+);
+
+create table public.workspace_invites (
+  id uuid primary key default uuid_generate_v4(),
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  invited_email text not null,
+  invited_by uuid not null references public.profiles (id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+  created_at timestamptz not null default now()
+);
+
+-- Helper: ist der aktuelle Nutzer Mitglied eines Workspaces?
+-- (security definer, um RLS-Rekursion auf workspace_members zu vermeiden)
+create or replace function public.is_workspace_member(_workspace_id uuid, _user_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = _workspace_id and wm.user_id = _user_id
+  );
+$$;
+
+alter table public.workspaces enable row level security;
+alter table public.workspace_members enable row level security;
+alter table public.workspace_invites enable row level security;
+
+create policy "Workspaces: Mitglieder koennen lesen"
+  on public.workspaces for select
+  to authenticated
+  using (public.is_workspace_member(id, auth.uid()));
+
+create policy "Workspaces: eingeloggte Nutzer koennen erstellen"
+  on public.workspaces for insert
+  to authenticated
+  with check (created_by = auth.uid());
+
+create policy "Workspaces: Ersteller kann bearbeiten"
+  on public.workspaces for update
+  to authenticated
+  using (created_by = auth.uid());
+
+create policy "Workspaces: Ersteller kann loeschen"
+  on public.workspaces for delete
+  to authenticated
+  using (created_by = auth.uid());
+
+create policy "Mitgliederliste: Mitglieder koennen lesen"
+  on public.workspace_members for select
+  to authenticated
+  using (public.is_workspace_member(workspace_id, auth.uid()));
+
+create policy "Mitgliederliste: Beitritt per eigener User-ID"
+  on public.workspace_members for insert
+  to authenticated
+  with check (user_id = auth.uid());
+
+create policy "Mitgliederliste: Mitglied kann sich selbst entfernen"
+  on public.workspace_members for delete
+  to authenticated
+  using (user_id = auth.uid());
+
+create policy "Invites: sichtbar fuer Eingeladene und Workspace-Mitglieder"
+  on public.workspace_invites for select
+  to authenticated
+  using (
+    invited_email = (select email from auth.users where id = auth.uid())
+    or public.is_workspace_member(workspace_id, auth.uid())
+  );
+
+create policy "Invites: Mitglieder koennen einladen"
+  on public.workspace_invites for insert
+  to authenticated
+  with check (public.is_workspace_member(workspace_id, auth.uid()) and invited_by = auth.uid());
+
+create policy "Invites: Eingeladener oder Einladender kann Status aendern"
+  on public.workspace_invites for update
+  to authenticated
+  using (
+    invited_email = (select email from auth.users where id = auth.uid())
+    or public.is_workspace_member(workspace_id, auth.uid())
+  );
+
+-- Wenn ein neuer Nutzer registriert wird (oder sich einloggt), offene Einladungen
+-- fuer seine E-Mail-Adresse automatisch in Mitgliedschaften umwandeln.
+create or replace function public.accept_pending_invites()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.workspace_members (workspace_id, user_id)
+  select wi.workspace_id, new.id
+  from public.workspace_invites wi
+  where wi.invited_email = new.email and wi.status = 'pending'
+  on conflict do nothing;
+
+  update public.workspace_invites
+  set status = 'accepted'
+  where invited_email = new.email and status = 'pending';
+
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created_accept_invites
+  after insert on auth.users
+  for each row execute procedure public.accept_pending_invites();
+
+-- Wird beim Erstellen einer Einladung aufgerufen: existiert bereits ein Account
+-- mit dieser E-Mail, wird die Person sofort als Mitglied hinzugefuegt.
+create or replace function public.try_add_existing_user_to_workspace(
+  _workspace_id uuid,
+  _email text
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  _user_id uuid;
+begin
+  select id into _user_id from auth.users where email = _email limit 1;
+
+  if _user_id is not null then
+    insert into public.workspace_members (workspace_id, user_id)
+    values (_workspace_id, _user_id)
+    on conflict do nothing;
+
+    update public.workspace_invites
+    set status = 'accepted'
+    where workspace_id = _workspace_id and invited_email = _email and status = 'pending';
+  end if;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- TODOS
+-- ----------------------------------------------------------------------------
+create table public.todos (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  title text not null,
+  date date not null,
+  is_recurring boolean not null default false,
+  recurrence_type text check (recurrence_type in ('daily', 'weekly', 'monthly')),
+  recurrence_parent_id uuid references public.todos (id) on delete set null,
+  status text not null default 'open' check (status in ('open', 'pending', 'confirmed', 'rejected', 'missed')),
+  penalized boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index todos_workspace_date_idx on public.todos (workspace_id, date);
+create index todos_user_date_idx on public.todos (user_id, date);
+
+create table public.todo_proof (
+  id uuid primary key default uuid_generate_v4(),
+  todo_id uuid not null references public.todos (id) on delete cascade,
+  file_url text not null,
+  uploaded_at timestamptz not null default now()
+);
+
+create table public.todo_confirmations (
+  id uuid primary key default uuid_generate_v4(),
+  todo_id uuid not null references public.todos (id) on delete cascade,
+  confirmed_by uuid not null references public.profiles (id) on delete cascade,
+  action text not null check (action in ('confirmed', 'requested_proof')),
+  comment text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.todos enable row level security;
+alter table public.todo_proof enable row level security;
+alter table public.todo_confirmations enable row level security;
+
+create policy "Todos: Workspace-Mitglieder koennen lesen"
+  on public.todos for select
+  to authenticated
+  using (public.is_workspace_member(workspace_id, auth.uid()));
+
+create policy "Todos: eigene Todos erstellen"
+  on public.todos for insert
+  to authenticated
+  with check (user_id = auth.uid() and public.is_workspace_member(workspace_id, auth.uid()));
+
+create policy "Todos: eigene Todos bearbeiten"
+  on public.todos for update
+  to authenticated
+  using (user_id = auth.uid() or public.is_workspace_member(workspace_id, auth.uid()));
+
+create policy "Todos: eigene Todos loeschen"
+  on public.todos for delete
+  to authenticated
+  using (user_id = auth.uid());
+
+create policy "Beweise: Workspace-Mitglieder koennen lesen"
+  on public.todo_proof for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.todos t
+      where t.id = todo_id and public.is_workspace_member(t.workspace_id, auth.uid())
+    )
+  );
+
+create policy "Beweise: Eigentuemer des Todos kann hochladen"
+  on public.todo_proof for insert
+  to authenticated
+  with check (
+    exists (
+      select 1 from public.todos t
+      where t.id = todo_id and t.user_id = auth.uid()
+    )
+  );
+
+create policy "Bestaetigungen: Workspace-Mitglieder koennen lesen"
+  on public.todo_confirmations for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.todos t
+      where t.id = todo_id and public.is_workspace_member(t.workspace_id, auth.uid())
+    )
+  );
+
+create policy "Bestaetigungen: Workspace-Mitglieder koennen bestaetigen"
+  on public.todo_confirmations for insert
+  to authenticated
+  with check (
+    confirmed_by = auth.uid()
+    and exists (
+      select 1 from public.todos t
+      where t.id = todo_id and public.is_workspace_member(t.workspace_id, auth.uid())
+    )
+  );
+
+-- ----------------------------------------------------------------------------
+-- POINTS & STREAKS
+-- ----------------------------------------------------------------------------
+create table public.points (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  todo_id uuid references public.todos (id) on delete set null,
+  amount integer not null,
+  reason text not null,
+  created_at timestamptz not null default now()
+);
+
+create table public.streaks (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  current_streak integer not null default 0,
+  last_active_date date,
+  primary key (user_id, workspace_id)
+);
+
+alter table public.points enable row level security;
+alter table public.streaks enable row level security;
+
+create policy "Punkte: Workspace-Mitglieder koennen lesen"
+  on public.points for select
+  to authenticated
+  using (public.is_workspace_member(workspace_id, auth.uid()));
+
+create policy "Streaks: Workspace-Mitglieder koennen lesen"
+  on public.streaks for select
+  to authenticated
+  using (public.is_workspace_member(workspace_id, auth.uid()));
+
+-- ----------------------------------------------------------------------------
+-- GOALS
+-- ----------------------------------------------------------------------------
+create table public.monthly_goals (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  month date not null, -- always 1st day of month
+  target_points integer not null check (target_points > 0),
+  reward_text text not null,
+  achieved boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (user_id, workspace_id, month)
+);
+
+create table public.weekly_goals (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  week_start date not null, -- always a Monday
+  title text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.monthly_goals enable row level security;
+alter table public.weekly_goals enable row level security;
+
+create policy "Monatsziele: eigene Ziele lesen"
+  on public.monthly_goals for select
+  to authenticated
+  using (user_id = auth.uid() or public.is_workspace_member(workspace_id, auth.uid()));
+
+create policy "Monatsziele: eigene Ziele verwalten (insert)"
+  on public.monthly_goals for insert
+  to authenticated
+  with check (user_id = auth.uid());
+
+create policy "Monatsziele: eigene Ziele verwalten (update)"
+  on public.monthly_goals for update
+  to authenticated
+  using (user_id = auth.uid());
+
+create policy "Wochenziele: Workspace-Mitglieder koennen lesen"
+  on public.weekly_goals for select
+  to authenticated
+  using (public.is_workspace_member(workspace_id, auth.uid()));
+
+create policy "Wochenziele: eigene Ziele verwalten (insert)"
+  on public.weekly_goals for insert
+  to authenticated
+  with check (user_id = auth.uid());
+
+create policy "Wochenziele: eigene Ziele verwalten (update)"
+  on public.weekly_goals for update
+  to authenticated
+  using (user_id = auth.uid());
+
+create policy "Wochenziele: eigene Ziele verwalten (delete)"
+  on public.weekly_goals for delete
+  to authenticated
+  using (user_id = auth.uid());
+
+-- ----------------------------------------------------------------------------
+-- POINTS / STREAK / GOAL HELPER FUNCTIONS
+-- ----------------------------------------------------------------------------
+
+-- Vergibt Punkte und aktualisiert Streak + Monatsziel-Fortschritt
+create or replace function public.award_points(
+  _user_id uuid,
+  _workspace_id uuid,
+  _todo_id uuid,
+  _amount integer,
+  _reason text
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.points (user_id, workspace_id, todo_id, amount, reason)
+  values (_user_id, _workspace_id, _todo_id, _amount, _reason);
+
+  -- Monatsziel-Fortschritt pruefen
+  perform public.check_monthly_goal(_user_id, _workspace_id);
+end;
+$$;
+
+-- Prueft, ob das aktuelle Monatsziel erreicht wurde, und markiert es entsprechend
+create or replace function public.check_monthly_goal(_user_id uuid, _workspace_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  _month date := date_trunc('month', now())::date;
+  _total integer;
+  _goal record;
+begin
+  select * into _goal
+  from public.monthly_goals
+  where user_id = _user_id and workspace_id = _workspace_id and month = _month
+  limit 1;
+
+  if _goal is null then
+    return;
+  end if;
+
+  select coalesce(sum(amount), 0) into _total
+  from public.points
+  where user_id = _user_id
+    and workspace_id = _workspace_id
+    and created_at >= _month
+    and created_at < (_month + interval '1 month');
+
+  if _total >= _goal.target_points and not _goal.achieved then
+    update public.monthly_goals set achieved = true where id = _goal.id;
+  elsif _total < _goal.target_points and _goal.achieved then
+    update public.monthly_goals set achieved = false where id = _goal.id;
+  end if;
+end;
+$$;
+
+-- Aktualisiert die Streak eines Nutzers, wenn ein Todo bestaetigt wird.
+-- Gibt die Anzahl an Bonus-Punkten zurueck (ab Tag 3 in Folge: +2)
+create or replace function public.bump_streak(_user_id uuid, _workspace_id uuid, _todo_date date)
+returns integer
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  _streak record;
+  _new_streak integer;
+  _bonus integer := 0;
+begin
+  select * into _streak
+  from public.streaks
+  where user_id = _user_id and workspace_id = _workspace_id
+  for update;
+
+  if _streak is null then
+    _new_streak := 1;
+    insert into public.streaks (user_id, workspace_id, current_streak, last_active_date)
+    values (_user_id, _workspace_id, _new_streak, _todo_date);
+  else
+    if _streak.last_active_date = _todo_date then
+      -- gleicher Tag, Streak bleibt gleich
+      _new_streak := _streak.current_streak;
+    elsif _streak.last_active_date = _todo_date - interval '1 day' then
+      _new_streak := _streak.current_streak + 1;
+    elsif _streak.last_active_date < _todo_date then
+      -- Luecke -> Streak beginnt neu
+      _new_streak := 1;
+    else
+      -- Bestaetigung fuer einen Tag vor dem letzten aktiven Tag (rueckwirkend) -> Streak unveraendert
+      _new_streak := _streak.current_streak;
+    end if;
+
+    update public.streaks
+    set current_streak = _new_streak,
+        last_active_date = greatest(_streak.last_active_date, _todo_date)
+    where user_id = _user_id and workspace_id = _workspace_id;
+  end if;
+
+  if _new_streak >= 3 then
+    _bonus := 2;
+  end if;
+
+  return _bonus;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- TODO ACTIONS (Status-Flow)
+-- ----------------------------------------------------------------------------
+
+-- Nutzer markiert eigenes Todo als "fertig" -> Status wird "pending" (ausstehend)
+create or replace function public.mark_todo_done(_todo_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  _todo public.todos;
+begin
+  select * into _todo from public.todos where id = _todo_id;
+
+  if _todo is null or _todo.user_id <> auth.uid() then
+    raise exception 'Nicht erlaubt';
+  end if;
+
+  if _todo.status not in ('open', 'rejected') then
+    raise exception 'Todo kann in diesem Status nicht abgeschlossen werden';
+  end if;
+
+  update public.todos set status = 'pending' where id = _todo_id;
+end;
+$$;
+
+-- Workspace-Mitglied bestaetigt ein Todo -> Punkte + Streak werden vergeben.
+-- Funktioniert auch nachtraeglich: bereits vergebene Minuspunkte (Reason 'penalty_missed')
+-- werden ausgeglichen (+5).
+create or replace function public.confirm_todo(_todo_id uuid, _comment text default null)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  _todo public.todos;
+  _bonus integer;
+  _was_penalized boolean;
+begin
+  select * into _todo from public.todos where id = _todo_id;
+
+  if _todo is null then
+    raise exception 'Todo nicht gefunden';
+  end if;
+
+  if not public.is_workspace_member(_todo.workspace_id, auth.uid()) then
+    raise exception 'Nicht erlaubt';
+  end if;
+
+  if _todo.status not in ('pending', 'rejected', 'missed') then
+    raise exception 'Todo kann in diesem Status nicht bestaetigt werden';
+  end if;
+
+  insert into public.todo_confirmations (todo_id, confirmed_by, action, comment)
+  values (_todo_id, auth.uid(), 'confirmed', _comment);
+
+  _was_penalized := _todo.penalized;
+
+  update public.todos set status = 'confirmed', penalized = false where id = _todo_id;
+
+  -- Falls bereits ein Strafpunkt-Abzug erfolgt war: rueckgaengig machen (+5)
+  if _was_penalized then
+    perform public.award_points(_todo.user_id, _todo.workspace_id, _todo.id, 5, 'penalty_reversed');
+  end if;
+
+  -- Streak aktualisieren und Bonus berechnen
+  _bonus := public.bump_streak(_todo.user_id, _todo.workspace_id, _todo.date);
+
+  perform public.award_points(_todo.user_id, _todo.workspace_id, _todo.id, 10, 'todo_confirmed');
+
+  if _bonus > 0 then
+    perform public.award_points(_todo.user_id, _todo.workspace_id, _todo.id, _bonus, 'streak_bonus');
+  end if;
+end;
+$$;
+
+-- Workspace-Mitglied fordert einen Beweis an -> Status "rejected"
+create or replace function public.request_todo_proof(_todo_id uuid, _comment text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  _todo public.todos;
+begin
+  select * into _todo from public.todos where id = _todo_id;
+
+  if _todo is null then
+    raise exception 'Todo nicht gefunden';
+  end if;
+
+  if not public.is_workspace_member(_todo.workspace_id, auth.uid()) then
+    raise exception 'Nicht erlaubt';
+  end if;
+
+  if _todo.status <> 'pending' then
+    raise exception 'Beweis kann nur fuer ausstehende Todos angefordert werden';
+  end if;
+
+  insert into public.todo_confirmations (todo_id, confirmed_by, action, comment)
+  values (_todo_id, auth.uid(), 'requested_proof', _comment);
+
+  update public.todos set status = 'rejected' where id = _todo_id;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- MITTERNACHTS-JOB: Strafpunkte fuer verpasste Todos + wiederkehrende Todos erzeugen
+-- ----------------------------------------------------------------------------
+create or replace function public.run_daily_maintenance()
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  _todo record;
+  _next_date date;
+begin
+  -- 1. Strafpunkte fuer offene/ueberfaellige Todos vergeben
+  for _todo in
+    select * from public.todos
+    where date < current_date
+      and status in ('open', 'rejected')
+      and penalized = false
+  loop
+    update public.todos set status = 'missed', penalized = true where id = _todo.id;
+    perform public.award_points(_todo.user_id, _todo.workspace_id, _todo.id, -5, 'penalty_missed');
+
+    -- Streak zuruecksetzen, wenn der verpasste Tag direkt nach dem letzten aktiven Tag lag
+    update public.streaks
+    set current_streak = 0
+    where user_id = _todo.user_id
+      and workspace_id = _todo.workspace_id
+      and (last_active_date is null or last_active_date < _todo.date);
+  end loop;
+
+  -- 2. Naechste Instanz wiederkehrender Todos erzeugen
+  for _todo in
+    select * from public.todos
+    where is_recurring = true
+      and date = current_date - interval '1 day'
+  loop
+    _next_date := case _todo.recurrence_type
+      when 'daily' then _todo.date + interval '1 day'
+      when 'weekly' then _todo.date + interval '7 day'
+      when 'monthly' then _todo.date + interval '1 month'
+      else null
+    end;
+
+    if _next_date is not null then
+      insert into public.todos (user_id, workspace_id, title, date, is_recurring, recurrence_type, recurrence_parent_id)
+      values (
+        _todo.user_id,
+        _todo.workspace_id,
+        _todo.title,
+        _next_date,
+        true,
+        _todo.recurrence_type,
+        coalesce(_todo.recurrence_parent_id, _todo.id)
+      );
+    end if;
+  end loop;
+end;
+$$;
+
+-- Taeglich um Mitternacht (Server-Zeit) ausfuehren
+select cron.schedule(
+  'lgsd-daily-maintenance',
+  '0 0 * * *',
+  $$select public.run_daily_maintenance();$$
+);
+
+-- ----------------------------------------------------------------------------
+-- STORAGE: Bucket fuer Beweis-Uploads
+-- ----------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('todo-proofs', 'todo-proofs', true)
+on conflict (id) do nothing;
+
+create policy "Beweis-Uploads: Lesen fuer alle"
+  on storage.objects for select
+  to authenticated
+  using (bucket_id = 'todo-proofs');
+
+create policy "Beweis-Uploads: eigene Datei hochladen"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'todo-proofs' and (storage.foldername(name))[1] = auth.uid()::text);
