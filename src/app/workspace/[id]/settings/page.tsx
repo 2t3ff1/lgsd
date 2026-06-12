@@ -14,32 +14,29 @@ import type { Profile } from "@/types/database";
 export default async function WorkspaceSettingsPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) redirect("/login");
 
-  const { data: workspace } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("id", params.id)
-    .maybeSingle();
+  const [{ data: workspace }, { data: profile }, { data: members }, { data: invites }] =
+    await Promise.all([
+      supabase.from("workspaces").select("*").eq("id", params.id).maybeSingle(),
+      supabase.from("profiles").select("display_name, avatar_url").eq("id", user.id).single(),
+      supabase
+        .from("workspace_members")
+        .select("user_id, joined_at, profiles(*)")
+        .eq("workspace_id", params.id)
+        .order("joined_at", { ascending: true }),
+      supabase
+        .from("workspace_invites")
+        .select("*")
+        .eq("workspace_id", params.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
+    ]);
 
   if (!workspace) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-
-  const { data: members } = await supabase
-    .from("workspace_members")
-    .select("user_id, joined_at, profiles(*)")
-    .eq("workspace_id", params.id)
-    .order("joined_at", { ascending: true });
-
-  const { data: invites } = await supabase
-    .from("workspace_invites")
-    .select("*")
-    .eq("workspace_id", params.id)
-    .eq("status", "pending")
-    .order("created_at", { ascending: false });
 
   const isOwner = workspace.created_by === user.id;
 

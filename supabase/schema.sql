@@ -73,6 +73,8 @@ create table public.workspace_members (
   primary key (workspace_id, user_id)
 );
 
+create index workspace_members_user_idx on public.workspace_members (user_id);
+
 create table public.workspace_invites (
   id uuid primary key default uuid_generate_v4(),
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
@@ -81,6 +83,8 @@ create table public.workspace_invites (
   status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
   created_at timestamptz not null default now()
 );
+
+create index workspace_invites_workspace_status_idx on public.workspace_invites (workspace_id, status);
 
 -- Helper: ist der aktuelle Nutzer Mitglied eines Workspaces?
 -- (security definer, um RLS-Rekursion auf workspace_members zu vermeiden)
@@ -95,6 +99,18 @@ as $$
     select 1 from public.workspace_members wm
     where wm.workspace_id = _workspace_id and wm.user_id = _user_id
   );
+$$;
+
+-- Helper: E-Mail-Adresse des aktuellen Nutzers (security definer, da "authenticated"
+-- kein direktes SELECT-Recht auf auth.users hat)
+create or replace function public.current_user_email()
+returns text
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select email from auth.users where id = auth.uid();
 $$;
 
 alter table public.workspaces enable row level security;
@@ -140,7 +156,7 @@ create policy "Invites: sichtbar fuer Eingeladene und Workspace-Mitglieder"
   on public.workspace_invites for select
   to authenticated
   using (
-    invited_email = (select email from auth.users where id = auth.uid())
+    invited_email = public.current_user_email()
     or public.is_workspace_member(workspace_id, auth.uid())
   );
 
@@ -153,7 +169,7 @@ create policy "Invites: Eingeladener oder Einladender kann Status aendern"
   on public.workspace_invites for update
   to authenticated
   using (
-    invited_email = (select email from auth.users where id = auth.uid())
+    invited_email = public.current_user_email()
     or public.is_workspace_member(workspace_id, auth.uid())
   );
 
@@ -229,6 +245,7 @@ create table public.todos (
   shift_request_reason text,
   shift_request_status text not null default 'none' check (shift_request_status in ('none', 'pending', 'approved', 'rejected')),
   shift_auto_approved boolean not null default false,
+  suggested_points integer not null default 5 check (suggested_points in (1, 3, 5, 7, 9)),
   created_at timestamptz not null default now()
 );
 
@@ -242,6 +259,8 @@ create table public.todo_proof (
   uploaded_at timestamptz not null default now()
 );
 
+create index todo_proof_todo_idx on public.todo_proof (todo_id);
+
 create table public.todo_confirmations (
   id uuid primary key default uuid_generate_v4(),
   todo_id uuid not null references public.todos (id) on delete cascade,
@@ -250,6 +269,8 @@ create table public.todo_confirmations (
   comment text,
   created_at timestamptz not null default now()
 );
+
+create index todo_confirmations_todo_idx on public.todo_confirmations (todo_id);
 
 alter table public.todos enable row level security;
 alter table public.todo_proof enable row level security;
@@ -270,10 +291,16 @@ create policy "Todos: eigene Todos bearbeiten"
   to authenticated
   using (user_id = auth.uid() or public.is_workspace_member(workspace_id, auth.uid()));
 
-create policy "Todos: eigene Todos loeschen"
+create policy "Todos: eigene oder Workspace-Ersteller kann loeschen"
   on public.todos for delete
   to authenticated
-  using (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    or exists (
+      select 1 from public.workspaces w
+      where w.id = workspace_id and w.created_by = auth.uid()
+    )
+  );
 
 create policy "Beweise: Workspace-Mitglieder koennen lesen"
   on public.todo_proof for select
@@ -328,6 +355,9 @@ create table public.points (
   reason text not null,
   created_at timestamptz not null default now()
 );
+
+create index points_user_workspace_created_idx on public.points (user_id, workspace_id, created_at desc);
+create index points_workspace_idx on public.points (workspace_id);
 
 create table public.streaks (
   user_id uuid not null references public.profiles (id) on delete cascade,
@@ -525,7 +555,9 @@ $$;
 -- TODO ACTIONS (Status-Flow)
 -- ----------------------------------------------------------------------------
 
--- Nutzer markiert eigenes Todo als "fertig" -> Status wird "pending" (ausstehend)
+-- Nutzer markiert eigenes Todo als "fertig" -> Status wird "pending" (ausstehend).
+-- Ist der Nutzer das einzige Mitglied des Workspaces, gilt die Aufgabe sofort
+-- als bestaetigt und die Punkte werden direkt vergeben.
 create or replace function public.mark_todo_done(_todo_id uuid)
 returns void
 language plpgsql
@@ -533,6 +565,7 @@ security definer set search_path = public
 as $$
 declare
   _todo public.todos;
+  _member_count integer;
 begin
   select * into _todo from public.todos where id = _todo_id;
 
@@ -544,14 +577,24 @@ begin
     raise exception 'Todo kann in diesem Status nicht abgeschlossen werden';
   end if;
 
+  select count(*) into _member_count
+  from public.workspace_members
+  where workspace_id = _todo.workspace_id;
+
   update public.todos set status = 'pending', shift_auto_approved = false where id = _todo_id;
+
+  if _member_count <= 1 then
+    perform public.confirm_todo(_todo_id, null, _todo.suggested_points);
+  end if;
 end;
 $$;
 
 -- Workspace-Mitglied bestaetigt ein Todo -> Punkte + Streak werden vergeben.
+-- _points: vom Bestaetiger festgelegte Punktzahl (1/3/5/7/9). Ohne Angabe wird
+-- der Punktevorschlag des Erstellers (suggested_points) verwendet.
 -- Funktioniert auch nachtraeglich: bereits vergebene Minuspunkte (Reason 'penalty_missed')
 -- werden ausgeglichen (+5).
-create or replace function public.confirm_todo(_todo_id uuid, _comment text default null)
+create or replace function public.confirm_todo(_todo_id uuid, _comment text default null, _points integer default null)
 returns void
 language plpgsql
 security definer set search_path = public
@@ -560,6 +603,7 @@ declare
   _todo public.todos;
   _bonus integer;
   _was_penalized boolean;
+  _points_final integer;
 begin
   select * into _todo from public.todos where id = _todo_id;
 
@@ -573,6 +617,11 @@ begin
 
   if _todo.status not in ('pending', 'rejected', 'missed') then
     raise exception 'Todo kann in diesem Status nicht bestaetigt werden';
+  end if;
+
+  _points_final := coalesce(_points, _todo.suggested_points);
+  if _points_final not in (1, 3, 5, 7, 9) then
+    raise exception 'Ungueltige Punktzahl';
   end if;
 
   insert into public.todo_confirmations (todo_id, confirmed_by, action, comment)
@@ -590,7 +639,7 @@ begin
   -- Streak aktualisieren und Bonus berechnen
   _bonus := public.bump_streak(_todo.user_id, _todo.workspace_id, _todo.date);
 
-  perform public.award_points(_todo.user_id, _todo.workspace_id, _todo.id, 10, 'todo_confirmed');
+  perform public.award_points(_todo.user_id, _todo.workspace_id, _todo.id, _points_final, 'todo_confirmed');
 
   if _bonus > 0 then
     perform public.award_points(_todo.user_id, _todo.workspace_id, _todo.id, _bonus, 'streak_bonus');
@@ -822,3 +871,10 @@ create policy "Beweis-Uploads: eigene Datei hochladen"
   on storage.objects for insert
   to authenticated
   with check (bucket_id = 'todo-proofs' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ----------------------------------------------------------------------------
+-- REALTIME: Aenderungen an Todos, Punkten und Streaks live an Workspace-Mitglieder
+-- ----------------------------------------------------------------------------
+alter publication supabase_realtime add table public.todos;
+alter publication supabase_realtime add table public.points;
+alter publication supabase_realtime add table public.streaks;

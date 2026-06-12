@@ -16,7 +16,7 @@ import { Textarea, Input, Label } from "@/components/ui/Input";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PointsPopup } from "@/components/PointsPopup";
 import { cn } from "@/lib/utils";
-import type { Todo, TodoConfirmation, TodoProof } from "@/types/database";
+import { POINT_OPTIONS, type Todo, type TodoConfirmation, type TodoProof } from "@/types/database";
 
 const recurrenceLabels: Record<string, string> = {
   daily: "Täglich",
@@ -30,12 +30,14 @@ export function TodoItem({
   workspaceId,
   proof,
   lastConfirmation,
+  canDelete,
 }: {
   todo: Todo;
   isOwn: boolean;
   workspaceId: string;
   proof?: TodoProof;
   lastConfirmation?: TodoConfirmation;
+  canDelete?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [showProofRequest, setShowProofRequest] = useState(false);
@@ -46,6 +48,11 @@ export function TodoItem({
   const [shiftReason, setShiftReason] = useState("");
   const [shiftError, setShiftError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [confirmDialog, setConfirmDialog] = useState<"normal" | "retro" | null>(null);
+  const [selectedPoints, setSelectedPoints] = useState(todo.suggested_points);
+  const [pointsReason, setPointsReason] = useState("");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   function handleMarkDone() {
     startTransition(async () => {
@@ -59,11 +66,20 @@ export function TodoItem({
     });
   }
 
-  function handleConfirm(retro = false) {
+  function openConfirmDialog(mode: "normal" | "retro") {
+    setSelectedPoints(todo.suggested_points);
+    setPointsReason("");
+    setConfirmDialog(mode);
+  }
+
+  function handleConfirmSubmit() {
     startTransition(async () => {
-      const res = await confirmTodo(workspaceId, todo.id);
+      const reason =
+        selectedPoints !== todo.suggested_points ? pointsReason.trim() || undefined : undefined;
+      const res = await confirmTodo(workspaceId, todo.id, selectedPoints, reason);
       if (!res?.error) {
-        setPoints(retro ? 15 : 10);
+        setPoints(selectedPoints);
+        setConfirmDialog(null);
       }
     });
   }
@@ -106,6 +122,13 @@ export function TodoItem({
   function handleResolveShift(decision: "approve_no_penalty" | "approve_with_penalty" | "reject") {
     startTransition(async () => {
       await resolveShift(workspaceId, todo.id, decision);
+    });
+  }
+
+  function handleDelete() {
+    startTransition(async () => {
+      await deleteTodo(workspaceId, todo.id);
+      setShowDeleteDialog(false);
     });
   }
 
@@ -157,9 +180,9 @@ export function TodoItem({
             )}
           </div>
         </div>
-        {isOwn && todo.status === "open" && (
+        {canDelete && (
           <button
-            onClick={() => deleteTodo(workspaceId, todo.id)}
+            onClick={() => setShowDeleteDialog(true)}
             className="text-xs text-ink-light hover:text-danger-500"
             title="Löschen"
           >
@@ -174,15 +197,17 @@ export function TodoItem({
         {todo.status === "confirmed" && <Badge tone="success">Bestätigt ✅</Badge>}
         {todo.status === "rejected" && <Badge tone="accent">Beweis angefordert ❌</Badge>}
         {todo.status === "missed" && <Badge tone="danger">Verpasst (-5)</Badge>}
+        <Badge tone="neutral">{todo.suggested_points} Pkt. vorgeschlagen</Badge>
         {todo.shift_auto_approved && (
           <Badge tone="amber">⚠️ Automatisch verschoben (ohne Genehmigung)</Badge>
         )}
         {shiftPending && <Badge tone="amber">📅 Verschiebung beantragt</Badge>}
       </div>
 
-      {lastConfirmation?.action === "requested_proof" && lastConfirmation.comment && (
+      {lastConfirmation?.action === "requested_proof" && (
         <p className="rounded-lg bg-accent-100 px-2 py-1.5 text-xs text-accent-700 dark:bg-accent-500/20 dark:text-accent-300">
-          💬 {lastConfirmation.comment}
+          💬 {lastConfirmation.confirmer_name ?? "Jemand"} hat einen Beweis angefordert
+          {lastConfirmation.comment ? `: ${lastConfirmation.comment}` : ""}
         </p>
       )}
 
@@ -270,7 +295,7 @@ export function TodoItem({
         <div className="space-y-2 pt-1">
           {!showProofRequest ? (
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => handleConfirm(false)} disabled={pending} className="flex-1">
+              <Button size="sm" onClick={() => openConfirmDialog("normal")} disabled={pending} className="flex-1">
                 ✅ Bestätigen
               </Button>
               <Button
@@ -306,7 +331,7 @@ export function TodoItem({
 
       {/* Andere Mitglieder: nachtraegliche Bestaetigung fuer verpasste/abgelehnte Aufgaben */}
       {!isOwn && (todo.status === "missed" || todo.status === "rejected") && (
-        <Button size="sm" variant="outline" onClick={() => handleConfirm(true)} disabled={pending} className="w-full">
+        <Button size="sm" variant="outline" onClick={() => openConfirmDialog("retro")} disabled={pending} className="w-full">
           Nachträglich bestätigen
         </Button>
       )}
@@ -362,6 +387,65 @@ export function TodoItem({
           {shiftError && <p className="text-sm font-medium text-danger-600">{shiftError}</p>}
         </div>
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title="Aufgabe bestätigen"
+        description={`Vorschlag des Erstellers: ${todo.suggested_points} Punkte. Wähle die Punktzahl, die vergeben werden soll.`}
+        confirmLabel="Bestätigen & Punkte vergeben"
+        confirmVariant="primary"
+        loading={pending}
+        onConfirm={handleConfirmSubmit}
+        onCancel={() => setConfirmDialog(null)}
+      >
+        <div className="space-y-3">
+          <div>
+            <Label>Punkte</Label>
+            <div className="flex gap-1.5">
+              {POINT_OPTIONS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setSelectedPoints(p)}
+                  className={cn(
+                    "flex-1 rounded-xl border-2 px-2 py-1.5 text-center text-sm font-semibold transition-colors",
+                    selectedPoints === p
+                      ? "border-primary-400 bg-primary-100 text-primary-700 dark:bg-primary-500/20"
+                      : "border-border-subtle bg-surface"
+                  )}
+                >
+                  {p}
+                  {p === todo.suggested_points && (
+                    <span className="ml-1 text-[10px] font-normal text-ink-light">Vorschlag</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          {selectedPoints !== todo.suggested_points && (
+            <div>
+              <Label htmlFor={`points-reason-${todo.id}`}>Begründung (optional)</Label>
+              <Textarea
+                id={`points-reason-${todo.id}`}
+                rows={2}
+                value={pointsReason}
+                onChange={(e) => setPointsReason(e.target.value)}
+                placeholder="Warum eine andere Punktzahl?"
+              />
+            </div>
+          )}
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        title="Aufgabe löschen?"
+        description={`„${todo.title}“ wird unwiderruflich gelöscht.`}
+        confirmLabel="Löschen"
+        loading={pending}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteDialog(false)}
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import type { Profile, Todo, TodoConfirmation, TodoProof, WeeklyGoal } from "@/t
 export function MemberTile({
   profile,
   isOwn,
+  isWorkspaceOwner,
   workspaceId,
   todos,
   proofsByTodo,
@@ -19,6 +20,7 @@ export function MemberTile({
 }: {
   profile: Profile;
   isOwn: boolean;
+  isWorkspaceOwner: boolean;
   workspaceId: string;
   todos: Todo[];
   proofsByTodo: Map<string, TodoProof>;
@@ -67,6 +69,7 @@ export function MemberTile({
               workspaceId={workspaceId}
               proof={proofsByTodo.get(todo.id)}
               lastConfirmation={lastConfirmationByTodo.get(todo.id)}
+              canDelete={isOwn || isWorkspaceOwner}
             />
           ))
         )}

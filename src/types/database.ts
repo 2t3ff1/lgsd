@@ -50,6 +50,7 @@ export interface Todo {
   shift_request_reason: string | null;
   shift_request_status: ShiftRequestStatus;
   shift_auto_approved: boolean;
+  suggested_points: number;
   created_at: string;
 }
 
@@ -67,7 +68,10 @@ export interface TodoConfirmation {
   action: ConfirmationAction;
   comment: string | null;
   created_at: string;
+  confirmer_name?: string;
 }
+
+export const POINT_OPTIONS = [1, 3, 5, 7, 9] as const;
 
 export interface PointEntry {
   id: string;

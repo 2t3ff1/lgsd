@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { RecurrenceType } from "@/types/database";
+import { POINT_OPTIONS, type RecurrenceType } from "@/types/database";
 
 export async function createTodo(workspaceId: string, formData: FormData) {
   const supabase = createClient();
@@ -16,9 +16,14 @@ export async function createTodo(workspaceId: string, formData: FormData) {
   const date = String(formData.get("date") ?? "");
   const isRecurring = formData.get("is_recurring") === "on";
   const recurrenceType = String(formData.get("recurrence_type") ?? "") as RecurrenceType | "";
+  const suggestedPoints = Number(formData.get("suggested_points") ?? 5);
 
   if (!title || !date) {
     return { error: "Bitte Titel und Datum angeben." };
+  }
+
+  if (!POINT_OPTIONS.includes(suggestedPoints as (typeof POINT_OPTIONS)[number])) {
+    return { error: "Ungültiger Punktevorschlag." };
   }
 
   const { error } = await supabase.from("todos").insert({
@@ -28,6 +33,7 @@ export async function createTodo(workspaceId: string, formData: FormData) {
     date,
     is_recurring: isRecurring,
     recurrence_type: isRecurring && recurrenceType ? recurrenceType : null,
+    suggested_points: suggestedPoints,
   });
 
   if (error) {
@@ -103,11 +109,21 @@ export async function uploadProof(workspaceId: string, todoId: string, formData:
   return { success: true };
 }
 
-export async function confirmTodo(workspaceId: string, todoId: string, comment?: string) {
+export async function confirmTodo(
+  workspaceId: string,
+  todoId: string,
+  points: number,
+  comment?: string
+) {
+  if (!POINT_OPTIONS.includes(points as (typeof POINT_OPTIONS)[number])) {
+    return { error: "Ungültige Punktzahl." };
+  }
+
   const supabase = createClient();
   const { error } = await supabase.rpc("confirm_todo", {
     _todo_id: todoId,
     _comment: comment ?? null,
+    _points: points,
   });
 
   if (error) {

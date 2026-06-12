@@ -5,6 +5,7 @@ import { createTodo } from "@/app/actions/todos";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
 import { todayISO } from "@/lib/utils";
+import { POINT_OPTIONS } from "@/types/database";
 
 export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
@@ -79,6 +80,20 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
           <option value="monthly">Monatlich</option>
         </select>
       )}
+      <div>
+        <Label>Punktevorschlag</Label>
+        <div className="flex gap-1.5">
+          {POINT_OPTIONS.map((p) => (
+            <label
+              key={p}
+              className="flex-1 cursor-pointer rounded-xl border-2 border-border-subtle bg-surface px-2 py-1.5 text-center text-sm font-semibold transition-colors has-[:checked]:border-primary-400 has-[:checked]:bg-primary-100 has-[:checked]:text-primary-700 dark:has-[:checked]:bg-primary-500/20"
+            >
+              <input type="radio" name="suggested_points" value={p} defaultChecked={p === 5} className="sr-only" />
+              {p}
+            </label>
+          ))}
+        </div>
+      </div>
       {error && <p className="text-sm font-medium text-danger-600">{error}</p>}
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={loading}>

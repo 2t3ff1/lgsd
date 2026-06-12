@@ -14,20 +14,15 @@ import type { MonthlyGoal, Streak, Workspace } from "@/types/database";
 export default async function DashboardPage() {
   const supabase = createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  const { data: memberships } = await supabase
-    .from("workspace_members")
-    .select("workspace_id, workspaces(*)")
-    .eq("user_id", user.id);
+  const [{ data: profile }, { data: memberships }] = await Promise.all([
+    supabase.from("profiles").select("display_name, avatar_url").eq("id", user.id).single(),
+    supabase.from("workspace_members").select("workspace_id, workspaces(*)").eq("user_id", user.id),
+  ]);
 
   const workspaces: Workspace[] = (memberships ?? [])
     .map((m) => m.workspaces as unknown as Workspace)

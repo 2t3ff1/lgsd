@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { MemberTile } from "@/components/MemberTile";
 import { Leaderboard } from "@/components/Leaderboard";
+import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { Button } from "@/components/ui/Button";
 import type {
   Profile,
@@ -17,24 +18,18 @@ import type {
 export default async function WorkspacePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) redirect("/login");
 
-  const { data: workspace } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("id", params.id)
-    .maybeSingle();
+  const [{ data: workspace }, { data: profile }, { data: members }] = await Promise.all([
+    supabase.from("workspaces").select("*").eq("id", params.id).maybeSingle(),
+    supabase.from("profiles").select("display_name, avatar_url").eq("id", user.id).single(),
+    supabase.from("workspace_members").select("user_id, profiles(*)").eq("workspace_id", params.id),
+  ]);
 
   if (!workspace) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-
-  const { data: members } = await supabase
-    .from("workspace_members")
-    .select("user_id, profiles(*)")
-    .eq("workspace_id", params.id);
 
   const profiles: Profile[] = (members ?? [])
     .map((m) => m.profiles as unknown as Profile)
@@ -81,17 +76,20 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     todoIds.length
       ? supabase
           .from("todo_confirmations")
-          .select("*")
+          .select("*, profiles(display_name)")
           .in("todo_id", todoIds)
           .order("created_at", { ascending: true })
-      : Promise.resolve({ data: [] as TodoConfirmation[] }),
+      : Promise.resolve({ data: [] as (TodoConfirmation & { profiles: { display_name: string } | null })[] }),
   ]);
 
   const proofsByTodo = new Map<string, TodoProof>();
   (proofs ?? []).forEach((p) => proofsByTodo.set(p.todo_id, p as TodoProof));
 
   const lastConfirmationByTodo = new Map<string, TodoConfirmation>();
-  (confirmations ?? []).forEach((c) => lastConfirmationByTodo.set(c.todo_id, c as TodoConfirmation));
+  (confirmations ?? []).forEach((c) => {
+    const { profiles, ...rest } = c as TodoConfirmation & { profiles: { display_name: string } | null };
+    lastConfirmationByTodo.set(c.todo_id, { ...rest, confirmer_name: profiles?.display_name });
+  });
 
   const streakByUser = new Map<string, Streak>();
   (streaks ?? []).forEach((s) => streakByUser.set(s.user_id, s as Streak));
@@ -115,8 +113,11 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     return a.display_name.localeCompare(b.display_name);
   });
 
+  const isWorkspaceOwner = workspace.created_by === user.id;
+
   return (
     <div className="min-h-screen pb-12">
+      <RealtimeRefresher workspaceId={workspace.id} />
       <AppHeader
         displayName={profile?.display_name ?? "Du"}
         avatarUrl={profile?.avatar_url}
@@ -154,6 +155,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                   key={p.id}
                   profile={p}
                   isOwn={isOwn}
+                  isWorkspaceOwner={isWorkspaceOwner}
                   workspaceId={workspace.id}
                   todos={memberTodos}
                   proofsByTodo={proofsByTodo}
