@@ -78,7 +78,7 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
                     )}
                   </span>
                   {isOwner && p.id !== user.id && (
-                    <form action={async () => removeMember(workspace.id, p.id)}>
+                    <form action={removeMember.bind(null, workspace.id, p.id)}>
                       <Button type="submit" size="sm" variant="ghost" className="text-danger-500">
                         Entfernen
                       </Button>
@@ -106,7 +106,7 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
                     className="flex items-center justify-between rounded-xl bg-surface-muted px-3 py-2 text-sm"
                   >
                     <span>{inv.invited_email}</span>
-                    <form action={async () => cancelInvite(workspace.id, inv.id)}>
+                    <form action={cancelInvite.bind(null, workspace.id, inv.id)}>
                       <Button type="submit" size="sm" variant="ghost" className="text-danger-500">
                         Zurückziehen
                       </Button>
@@ -124,7 +124,7 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
             <p className="mb-3 text-sm text-ink-light">
               Du verlierst den Zugriff auf diesen Workspace und alle zugehörigen Aufgaben.
             </p>
-            <form action={async () => leaveWorkspace(workspace.id)}>
+            <form action={leaveWorkspace.bind(null, workspace.id)}>
               <Button type="submit" variant="danger">
                 Workspace verlassen
               </Button>
