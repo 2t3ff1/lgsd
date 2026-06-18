@@ -52,7 +52,7 @@ export function MemberTile({
 
       {isOwn && <WeeklyGoals workspaceId={workspaceId} goals={weeklyGoals} />}
 
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 max-h-[400px] space-y-2 overflow-y-auto pr-0.5">
         <p className="text-xs font-bold uppercase tracking-wide text-ink-light">
           {isOwn ? "Heute" : "Heute"}
         </p>

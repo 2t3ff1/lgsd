@@ -38,6 +38,16 @@ export function RealtimeRefresher({ workspaceId }: { workspaceId: string }) {
         { event: "*", schema: "public", table: "streaks", filter: `workspace_id=eq.${workspaceId}` },
         scheduleRefresh
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notes", filter: `workspace_id=eq.${workspaceId}` },
+        scheduleRefresh
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "note_replies" },
+        scheduleRefresh
+      )
       .subscribe();
 
     return () => {

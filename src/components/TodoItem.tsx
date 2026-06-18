@@ -192,6 +192,11 @@ export function TodoItem({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        {todo.scheduled_time && (
+          <span className="text-xs font-medium text-ink-light">
+            🕐 {todo.scheduled_time.slice(0, 5)} Uhr
+          </span>
+        )}
         {todo.status === "open" && <Badge tone="neutral">Offen</Badge>}
         {todo.status === "pending" && <Badge tone="primary">⏳ Wartet auf Bestätigung</Badge>}
         {todo.status === "confirmed" && <Badge tone="success">Bestätigt ✅</Badge>}
