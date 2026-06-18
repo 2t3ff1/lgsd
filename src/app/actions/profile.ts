@@ -25,3 +25,20 @@ export async function updateProfile(formData: FormData) {
   revalidatePath("/dashboard");
   return { success: true };
 }
+
+export async function updateReminderTime(time: string | null) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ reminder_time: time })
+    .eq("id", user.id);
+
+  if (error) return { error: "Erinnerung konnte nicht gespeichert werden." };
+  revalidatePath("/profile");
+  return { success: true };
+}

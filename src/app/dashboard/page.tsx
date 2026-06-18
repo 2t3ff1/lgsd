@@ -9,7 +9,8 @@ import { StreakBadge } from "@/components/ui/StreakBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateWorkspaceCard } from "@/components/CreateWorkspaceCard";
 import { MonthlyGoalCelebration } from "@/components/MonthlyGoalCelebration";
-import type { MonthlyGoal, Streak, Workspace } from "@/types/database";
+import { WeekPreview } from "@/components/WeekPreview";
+import type { MonthlyGoal, Streak, Todo, Workspace } from "@/types/database";
 
 export default async function DashboardPage() {
   const supabase = createClient();
@@ -35,7 +36,11 @@ export default async function DashboardPage() {
   monthStart.setHours(0, 0, 0, 0);
   const monthISO = monthStart.toISOString().slice(0, 10);
 
-  const [{ data: memberCounts }, { data: goals }, { data: streaks }, { data: monthPoints }] =
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const weekEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const weekEndISO = weekEndDate.toISOString().slice(0, 10);
+
+  const [{ data: memberCounts }, { data: goals }, { data: streaks }, { data: monthPoints }, { data: upcomingTodos }] =
     await Promise.all([
       workspaceIds.length
         ? supabase.from("workspace_members").select("workspace_id, user_id").in("workspace_id", workspaceIds)
@@ -58,6 +63,13 @@ export default async function DashboardPage() {
             .eq("user_id", user.id)
             .gte("created_at", monthStart.toISOString())
         : Promise.resolve({ data: [] as { workspace_id: string; amount: number }[] }),
+      supabase
+        .from("todos")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("date", todayISO)
+        .lte("date", weekEndISO)
+        .order("date", { ascending: true }),
     ]);
 
   const memberCountByWorkspace = new Map<string, number>();
@@ -74,6 +86,13 @@ export default async function DashboardPage() {
   const pointsByWorkspace = new Map<string, number>();
   (monthPoints ?? []).forEach((p) => {
     pointsByWorkspace.set(p.workspace_id, (pointsByWorkspace.get(p.workspace_id) ?? 0) + p.amount);
+  });
+
+  const todosByDate: Record<string, Todo[]> = {};
+  (upcomingTodos ?? []).forEach((t) => {
+    const arr = todosByDate[t.date] ?? [];
+    arr.push(t as Todo);
+    todosByDate[t.date] = arr;
   });
 
   const achievedGoal = (goals ?? []).find((g) => g.achieved) as MonthlyGoal | undefined;
@@ -153,6 +172,8 @@ export default async function DashboardPage() {
             <CreateWorkspaceCard />
           </div>
         )}
+
+        <WeekPreview todosByDate={todosByDate} />
       </main>
     </div>
   );

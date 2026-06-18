@@ -5,8 +5,10 @@ import { AppHeader } from "@/components/AppHeader";
 import { MemberTile } from "@/components/MemberTile";
 import { Leaderboard } from "@/components/Leaderboard";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
+import { NoteBoard } from "@/components/NoteBoard";
 import { Button } from "@/components/ui/Button";
 import type {
+  Note,
   Profile,
   Streak,
   Todo,
@@ -68,6 +70,14 @@ export default async function WorkspacePage({ params }: { params: { id: string }
 
   const allTodos: Todo[] = todos ?? [];
   const todoIds = allTodos.map((t) => t.id);
+
+  const { data: notesRaw } = await supabase
+    .from("notes")
+    .select("*, profiles(display_name, avatar_url), note_replies(*, profiles(display_name))")
+    .eq("workspace_id", params.id)
+    .order("created_at", { ascending: false });
+
+  const notes: Note[] = (notesRaw ?? []) as unknown as Note[];
 
   const [{ data: proofs }, { data: confirmations }] = await Promise.all([
     todoIds.length
@@ -179,6 +189,8 @@ export default async function WorkspacePage({ params }: { params: { id: string }
             />
           </div>
         </div>
+
+        <NoteBoard workspaceId={workspace.id} notes={notes} />
       </main>
     </div>
   );

@@ -17,6 +17,7 @@ export async function createTodo(workspaceId: string, formData: FormData) {
   const isRecurring = formData.get("is_recurring") === "on";
   const recurrenceType = String(formData.get("recurrence_type") ?? "") as RecurrenceType | "";
   const suggestedPoints = Number(formData.get("suggested_points") ?? 5);
+  const scheduledTime = String(formData.get("scheduled_time") ?? "").trim() || null;
 
   if (!title || !date) {
     return { error: "Bitte Titel und Datum angeben." };
@@ -34,6 +35,7 @@ export async function createTodo(workspaceId: string, formData: FormData) {
     is_recurring: isRecurring,
     recurrence_type: isRecurring && recurrenceType ? recurrenceType : null,
     suggested_points: suggestedPoints,
+    scheduled_time: scheduledTime,
   });
 
   if (error) {

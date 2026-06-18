@@ -6,6 +6,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { ProfileForm } from "@/components/ProfileForm";
 import { MonthlyGoalForm } from "@/components/MonthlyGoalForm";
+import { ReminderTimeForm } from "@/components/ReminderTimeForm";
+import { TodoHistory, type HistoryTodo } from "@/components/TodoHistory";
 import { formatDate } from "@/lib/utils";
 import type { MonthlyGoal, PointEntry, Workspace } from "@/types/database";
 
@@ -38,6 +40,40 @@ export default async function ProfilePage() {
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
   const monthISO = monthStart.toISOString().slice(0, 10);
+
+  const { data: confirmedTodosRaw } = await supabase
+    .from("todos")
+    .select(`
+      id, title, date, workspace_id,
+      points(amount, reason),
+      todo_confirmations(action, profiles(display_name))
+    `)
+    .eq("user_id", user.id)
+    .eq("status", "confirmed")
+    .order("date", { ascending: false })
+    .limit(200);
+
+  type RawTodo = {
+    id: string; title: string; date: string; workspace_id: string;
+    points: { amount: number; reason: string }[];
+    todo_confirmations: { action: string; profiles: { display_name: string } | null }[];
+  };
+  const historyTodos: HistoryTodo[] = ((confirmedTodosRaw ?? []) as unknown as RawTodo[]).map((t) => {
+    const pointsAwarded = t.points
+      .filter((p) => p.reason === "todo_confirmed")
+      .reduce((sum, p) => sum + p.amount, 0);
+    const confirmerName =
+      t.todo_confirmations.find((c) => c.action === "confirmed")?.profiles?.display_name ?? null;
+    return {
+      id: t.id,
+      title: t.title,
+      date: t.date,
+      workspace_id: t.workspace_id,
+      workspace_name: "",
+      points_awarded: pointsAwarded,
+      confirmed_by_name: confirmerName,
+    };
+  });
 
   const [{ data: goals }, { data: monthPoints }, { data: history }] = await Promise.all([
     workspaceIds.length
@@ -72,6 +108,11 @@ export default async function ProfilePage() {
   });
 
   const workspaceById = new Map(workspaces.map((w) => [w.id, w]));
+
+  // workspace_name nachtraeglich einsetzen (workspaceById ist erst jetzt verfuegbar)
+  historyTodos.forEach((t) => {
+    t.workspace_name = workspaceById.get(t.workspace_id as unknown as string)?.name ?? "Workspace";
+  });
 
   return (
     <div className="min-h-screen pb-12">
@@ -110,6 +151,16 @@ export default async function ProfilePage() {
               ))}
             </div>
           )}
+        </Card>
+
+        <Card className="rounded-2xl">
+          <h2 className="mb-3 font-bold">Aufgaben-Verlauf</h2>
+          <TodoHistory todos={historyTodos} />
+        </Card>
+
+        <Card className="rounded-2xl">
+          <h2 className="mb-2 font-bold">Tägliche Erinnerung</h2>
+          <ReminderTimeForm reminderTime={profile?.reminder_time ?? null} />
         </Card>
 
         <Card className="rounded-2xl">

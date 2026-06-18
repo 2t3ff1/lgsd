@@ -7,6 +7,7 @@ export interface Profile {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  reminder_time: string | null;
   created_at: string;
 }
 
@@ -51,6 +52,7 @@ export interface Todo {
   shift_request_status: ShiftRequestStatus;
   shift_auto_approved: boolean;
   suggested_points: number;
+  scheduled_time: string | null;
   created_at: string;
 }
 
@@ -108,4 +110,24 @@ export interface WeeklyGoal {
   week_start: string;
   title: string;
   created_at: string;
+}
+
+export interface NoteReply {
+  id: string;
+  note_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  profiles?: { display_name: string } | null;
+}
+
+export interface Note {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  content: string;
+  color: string;
+  created_at: string;
+  profiles?: { display_name: string; avatar_url: string | null } | null;
+  note_replies?: NoteReply[];
 }
