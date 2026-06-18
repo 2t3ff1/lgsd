@@ -15,9 +15,8 @@ import type { MonthlyGoal, Streak, Todo, Workspace } from "@/types/database";
 export default async function DashboardPage() {
   const supabase = createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user;
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const [{ data: profile }, { data: memberships }] = await Promise.all([

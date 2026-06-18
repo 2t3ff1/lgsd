@@ -20,9 +20,8 @@ import type {
 export default async function WorkspacePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user;
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const [{ data: workspace }, { data: profile }, { data: members }] = await Promise.all([

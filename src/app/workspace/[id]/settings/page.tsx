@@ -14,9 +14,8 @@ import type { Profile } from "@/types/database";
 export default async function WorkspaceSettingsPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user;
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const [{ data: workspace }, { data: profile }, { data: members }, { data: invites }] =

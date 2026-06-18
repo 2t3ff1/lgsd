@@ -21,9 +21,8 @@ const reasonLabels: Record<string, { label: string; emoji: string }> = {
 export default async function ProfilePage() {
   const supabase = createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user;
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const [{ data: profile }, { data: memberships }] = await Promise.all([
