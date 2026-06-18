@@ -24,23 +24,6 @@ export default async function DashboardPage() {
     supabase.from("workspace_members").select("workspace_id, workspaces(*)").eq("user_id", user.id),
   ]);
 
-  // Zweite Query ohne Join zum Isolieren des Problems
-  const { data: rawMembers, error: rawError } = await supabase
-    .from("workspace_members")
-    .select("workspace_id, user_id");
-
-  const { data: allMembers, error: allError } = await supabase
-    .from("workspace_members")
-    .select("workspace_id, user_id")
-    .eq("user_id", user.id);
-
-  console.log("=== DASHBOARD DEBUG ===");
-  console.log("user.id:", user.id);
-  console.log("memberships WITH join:", JSON.stringify(membershipsResult.data), "| error:", membershipsResult.error?.message);
-  console.log("workspace_members (all, no eq):", JSON.stringify(rawMembers), "| error:", rawError?.message);
-  console.log("workspace_members (eq user_id):", JSON.stringify(allMembers), "| error:", allError?.message);
-  console.log("======================");
-
   const { data: memberships } = membershipsResult;
 
   const workspaces: Workspace[] = (memberships ?? [])
