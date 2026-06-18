@@ -1,17 +1,17 @@
 -- =============================================================================
--- Migration 005: Uhrzeit fuer Todos, Erinnerungszeit, Zettel-Tafel
+-- Migration 006: Fix RLS-Policies fuer notes und note_replies
+-- Korrigiert is_workspace_member() Aufrufe (braucht 2 Parameter)
 -- Sicher erneut ausfuehrbar (idempotent)
 -- =============================================================================
 
--- Uhrzeit fuer Aufgaben
+-- Neue Spalten (idempotent, falls 005 teilweise durchgelaufen ist)
 alter table public.todos
   add column if not exists scheduled_time time without time zone;
 
--- Taeliche Erinnerungszeit im Profil
 alter table public.profiles
   add column if not exists reminder_time time without time zone;
 
--- Zettel-Tafel (Pinnwand)
+-- Zettel-Tafel Tabellen (falls noch nicht vorhanden)
 create table if not exists public.notes (
   id           uuid        primary key default gen_random_uuid(),
   workspace_id uuid        not null references public.workspaces(id) on delete cascade,
@@ -29,40 +29,45 @@ create table if not exists public.note_replies (
   created_at timestamptz not null default now()
 );
 
--- RLS: notes
+-- RLS aktivieren
 alter table public.notes enable row level security;
+alter table public.note_replies enable row level security;
 
+-- RLS: notes (mit korrektem 2-Parameter-Aufruf)
 drop policy if exists "Notes: lesen" on public.notes;
 create policy "Notes: lesen" on public.notes
   for select using (public.is_workspace_member(workspace_id, auth.uid()));
 
 drop policy if exists "Notes: erstellen" on public.notes;
 create policy "Notes: erstellen" on public.notes
-  for insert with check (public.is_workspace_member(workspace_id, auth.uid()) and user_id = auth.uid());
+  for insert with check (
+    public.is_workspace_member(workspace_id, auth.uid())
+    and user_id = auth.uid()
+  );
 
 drop policy if exists "Notes: loeschen" on public.notes;
 create policy "Notes: loeschen" on public.notes
   for delete using (public.is_workspace_member(workspace_id, auth.uid()));
 
--- RLS: note_replies
-alter table public.note_replies enable row level security;
-
+-- RLS: note_replies (mit korrektem 2-Parameter-Aufruf)
 drop policy if exists "NoteReplies: lesen" on public.note_replies;
 create policy "NoteReplies: lesen" on public.note_replies
   for select using (
     exists (
       select 1 from public.notes n
-      where n.id = note_id and public.is_workspace_member(n.workspace_id, auth.uid())
+      where n.id = note_id
+        and public.is_workspace_member(n.workspace_id, auth.uid())
     )
   );
 
 drop policy if exists "NoteReplies: erstellen" on public.note_replies;
 create policy "NoteReplies: erstellen" on public.note_replies
   for insert with check (
-    user_id = auth.uid() and
-    exists (
+    user_id = auth.uid()
+    and exists (
       select 1 from public.notes n
-      where n.id = note_id and public.is_workspace_member(n.workspace_id, auth.uid())
+      where n.id = note_id
+        and public.is_workspace_member(n.workspace_id, auth.uid())
     )
   );
 
@@ -71,11 +76,12 @@ create policy "NoteReplies: loeschen" on public.note_replies
   for delete using (
     exists (
       select 1 from public.notes n
-      where n.id = note_id and public.is_workspace_member(n.workspace_id, auth.uid())
+      where n.id = note_id
+        and public.is_workspace_member(n.workspace_id, auth.uid())
     )
   );
 
--- Realtime fuer notes und note_replies
+-- Realtime (idempotent)
 do $$
 begin
   if not exists (
