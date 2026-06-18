@@ -19,10 +19,19 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: memberships }] = await Promise.all([
+  const [{ data: profile }, membershipsResult] = await Promise.all([
     supabase.from("profiles").select("display_name, avatar_url").eq("id", user.id).single(),
     supabase.from("workspace_members").select("workspace_id, workspaces(*)").eq("user_id", user.id),
   ]);
+
+  console.log("=== DASHBOARD DEBUG ===");
+  console.log("user.id:", user.id);
+  console.log("memberships data:", JSON.stringify(membershipsResult.data, null, 2));
+  console.log("memberships error:", JSON.stringify(membershipsResult.error, null, 2));
+  console.log("memberships count:", membershipsResult.data?.length ?? 0);
+  console.log("======================");
+
+  const { data: memberships } = membershipsResult;
 
   const workspaces: Workspace[] = (memberships ?? [])
     .map((m) => m.workspaces as unknown as Workspace)
