@@ -5,10 +5,18 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-const FROM_EMAIL = Deno.env.get("REMINDER_FROM_EMAIL") ?? "LGSD <noreply@lgsd.app>";
+// URL der deployten Next.js-App + geteiltes Secret, damit die Edge Function
+// die eigentliche Web-Push-Zustellung (Node-Crypto) an die App delegieren kann.
+const SITE_URL = Deno.env.get("SITE_URL");
+const CRON_SECRET = Deno.env.get("CRON_SECRET");
 
 Deno.serve(async () => {
+  if (!SITE_URL || !CRON_SECRET) {
+    return new Response(JSON.stringify({ error: "SITE_URL/CRON_SECRET nicht konfiguriert" }), {
+      status: 500,
+    });
+  }
+
   const nowUTC = new Date();
   const currentHour = nowUTC.getUTCHours().toString().padStart(2, "0");
   const currentMinute = nowUTC.getUTCMinutes().toString().padStart(2, "0");
@@ -32,11 +40,6 @@ Deno.serve(async () => {
     // Pruefen ob die Minute auch passt (auf Minute genau)
     if (!profile.reminder_time?.startsWith(currentTime)) continue;
 
-    // Auth-User fuer E-Mail-Adresse
-    const { data: authUser } = await supabase.auth.admin.getUserById(profile.id);
-    const email = authUser?.user?.email;
-    if (!email) continue;
-
     // Offene Aufgaben fuer heute suchen
     const { data: openTodos } = await supabase
       .from("todos")
@@ -47,30 +50,17 @@ Deno.serve(async () => {
 
     if (!openTodos || openTodos.length === 0) continue;
 
-    // E-Mail via Resend senden
-    if (!RESEND_API_KEY) continue;
-
-    const todoList = openTodos.map((t) => `<li>${t.title}</li>`).join("");
-
-    await fetch("https://api.resend.com/emails", {
+    await fetch(`${SITE_URL}/api/push/notify`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
         "Content-Type": "application/json",
+        "x-cron-secret": CRON_SECRET,
       },
       body: JSON.stringify({
-        from: FROM_EMAIL,
-        to: email,
-        subject: `⏰ ${openTodos.length} offene Aufgabe${openTodos.length > 1 ? "n" : ""} heute`,
-        html: `
-          <h2>Hey ${profile.display_name} 👋</h2>
-          <p>Du hast noch <strong>${openTodos.length} offene Aufgabe${openTodos.length > 1 ? "n" : ""}</strong> für heute:</p>
-          <ul>${todoList}</ul>
-          <p>Hak sie ab bevor der Tag endet!</p>
-          <p style="color: #888; font-size: 12px;">
-            Du erhältst diese E-Mail weil du in LGSD eine tägliche Erinnerung eingestellt hast.
-          </p>
-        `,
+        userId: profile.id,
+        title: `⏰ ${openTodos.length} offene Aufgabe${openTodos.length > 1 ? "n" : ""} heute`,
+        body: `Hey ${profile.display_name}, hak deine Aufgaben ab bevor der Tag endet!`,
+        url: "/dashboard",
       }),
     });
 
