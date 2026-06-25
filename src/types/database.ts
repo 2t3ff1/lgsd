@@ -60,6 +60,8 @@ export interface Todo {
   is_recurring: boolean;
   recurrence_type: RecurrenceType | null;
   recurrence_parent_id: string | null;
+  recurrence_interval: number | null;
+  recurrence_days: number[] | null;
   status: TodoStatus;
   penalized: boolean;
   shift_count: number;

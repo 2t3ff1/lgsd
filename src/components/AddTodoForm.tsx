@@ -7,9 +7,20 @@ import { Input, Label } from "@/components/ui/Input";
 import { todayISO } from "@/lib/utils";
 import { POINT_OPTIONS } from "@/types/database";
 
+const WEEKDAYS = [
+  { value: 1, label: "Mo" },
+  { value: 2, label: "Di" },
+  { value: 3, label: "Mi" },
+  { value: 4, label: "Do" },
+  { value: 5, label: "Fr" },
+  { value: 6, label: "Sa" },
+  { value: 0, label: "So" },
+];
+
 export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceType, setRecurrenceType] = useState("daily");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -39,6 +50,7 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
         }
         formRef.current?.reset();
         setIsRecurring(false);
+        setRecurrenceType("daily");
         setLoading(false);
         setOpen(false);
       }}
@@ -76,15 +88,53 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
         Wiederkehrend
       </label>
       {isRecurring && (
-        <select
-          name="recurrence_type"
-          defaultValue="daily"
-          className="w-full rounded-xl border-2 border-border-subtle bg-surface px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
-        >
-          <option value="daily">Täglich</option>
-          <option value="weekly">Wöchentlich</option>
-          <option value="monthly">Monatlich</option>
-        </select>
+        <div className="space-y-2">
+          <select
+            name="recurrence_type"
+            value={recurrenceType}
+            onChange={(e) => setRecurrenceType(e.target.value)}
+            className="w-full rounded-xl border-2 border-border-subtle bg-surface px-3 py-2 text-sm focus:border-primary-400 focus:outline-none"
+          >
+            <option value="daily">Täglich</option>
+            <option value="weekly">Wöchentlich</option>
+            <option value="monthly">Monatlich</option>
+            <option value="interval">Alle X Tage</option>
+            <option value="weekdays">Nur bestimmte Wochentage</option>
+          </select>
+
+          {recurrenceType === "interval" && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Alle</span>
+              <Input
+                type="number"
+                name="recurrence_interval"
+                min={2}
+                defaultValue={2}
+                className="w-20"
+              />
+              <span className="text-sm font-medium">Tage</span>
+            </div>
+          )}
+
+          {recurrenceType === "weekdays" && (
+            <div className="flex flex-wrap gap-1.5">
+              {WEEKDAYS.map((d) => (
+                <label
+                  key={d.value}
+                  className="cursor-pointer rounded-xl border-2 border-border-subtle bg-surface px-2.5 py-1.5 text-xs font-semibold transition-colors has-[:checked]:border-primary-400 has-[:checked]:bg-primary-100 has-[:checked]:text-primary-700 dark:has-[:checked]:bg-primary-500/20"
+                >
+                  <input
+                    type="checkbox"
+                    name="recurrence_days"
+                    value={d.value}
+                    className="sr-only"
+                  />
+                  {d.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
       )}
       <div>
         <Label>Punktevorschlag</Label>
