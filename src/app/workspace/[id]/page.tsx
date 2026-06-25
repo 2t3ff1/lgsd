@@ -6,6 +6,7 @@ import { MemberTile } from "@/components/MemberTile";
 import { Leaderboard } from "@/components/Leaderboard";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { NoteBoard } from "@/components/NoteBoard";
+import { UserBackground } from "@/components/UserBackground";
 import { Button } from "@/components/ui/Button";
 import type {
   Note,
@@ -26,7 +27,11 @@ export default async function WorkspacePage({ params }: { params: { id: string }
 
   const [{ data: workspace }, { data: profile }, { data: members }] = await Promise.all([
     supabase.from("workspaces").select("*").eq("id", params.id).maybeSingle(),
-    supabase.from("profiles").select("display_name, avatar_url").eq("id", user.id).single(),
+    supabase
+      .from("profiles")
+      .select("display_name, avatar_url, avatar_color, background_color, background_image_url")
+      .eq("id", user.id)
+      .single(),
     supabase.from("workspace_members").select("user_id, profiles(*)").eq("workspace_id", params.id),
   ]);
 
@@ -126,10 +131,12 @@ export default async function WorkspacePage({ params }: { params: { id: string }
 
   return (
     <div className="min-h-screen pb-12">
+      <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
       <RealtimeRefresher workspaceId={workspace.id} />
       <AppHeader
         displayName={profile?.display_name ?? "Du"}
         avatarUrl={profile?.avatar_url}
+        avatarColor={profile?.avatar_color}
         backHref="/dashboard"
         backLabel="Workspaces"
       />
@@ -172,6 +179,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                   streak={streakByUser.get(p.id)?.current_streak ?? 0}
                   weeklyGoals={weeklyGoalsByUser.get(p.id) ?? []}
                   totalPoints={pointsByUser.get(p.id) ?? 0}
+                  cardColor={isOwn ? p.card_color : null}
                 />
               );
             })}

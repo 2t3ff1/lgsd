@@ -9,6 +9,7 @@ import { InviteMemberForm } from "@/components/InviteMemberForm";
 import { WorkspaceSettingsForm } from "@/components/WorkspaceSettingsForm";
 import { cancelInvite, leaveWorkspace, removeMember } from "@/app/actions/workspaces";
 import { DeleteWorkspaceButton } from "@/components/DeleteWorkspaceButton";
+import { UserBackground } from "@/components/UserBackground";
 import type { Profile } from "@/types/database";
 
 export default async function WorkspaceSettingsPage({ params }: { params: { id: string } }) {
@@ -21,7 +22,11 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
   const [{ data: workspace }, { data: profile }, { data: members }, { data: invites }] =
     await Promise.all([
       supabase.from("workspaces").select("*").eq("id", params.id).maybeSingle(),
-      supabase.from("profiles").select("display_name, avatar_url").eq("id", user.id).single(),
+      supabase
+        .from("profiles")
+        .select("display_name, avatar_url, avatar_color, background_color, background_image_url")
+        .eq("id", user.id)
+        .single(),
       supabase
         .from("workspace_members")
         .select("user_id, joined_at, profiles(*)")
@@ -41,9 +46,11 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
 
   return (
     <div className="min-h-screen pb-12">
+      <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
       <AppHeader
         displayName={profile?.display_name ?? "Du"}
         avatarUrl={profile?.avatar_url}
+        avatarColor={profile?.avatar_color}
         backHref={`/workspace/${workspace.id}`}
         backLabel="Workspace"
       />
@@ -66,7 +73,7 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
               if (!p) return null;
               return (
                 <li key={m.user_id} className="flex items-center gap-3 rounded-xl bg-surface-muted p-2.5">
-                  <Avatar name={p.display_name} url={p.avatar_url} size="sm" />
+                  <Avatar name={p.display_name} url={p.avatar_url} color={p.avatar_color} size="sm" />
                   <span className="flex-1 truncate font-semibold">
                     {p.display_name}
                     {p.id === user.id && <span className="text-primary-500"> (Du)</span>}

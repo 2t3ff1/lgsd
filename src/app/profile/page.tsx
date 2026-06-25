@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/Badge";
 import { ProfileForm } from "@/components/ProfileForm";
 import { MonthlyGoalForm } from "@/components/MonthlyGoalForm";
 import { ReminderTimeForm } from "@/components/ReminderTimeForm";
+import { AppearanceForm } from "@/components/AppearanceForm";
+import { UserBackground } from "@/components/UserBackground";
 import { TodoHistory, type HistoryTodo } from "@/components/TodoHistory";
 import { formatDate } from "@/lib/utils";
 import type { MonthlyGoal, PointEntry, Workspace } from "@/types/database";
@@ -115,14 +117,24 @@ export default async function ProfilePage() {
 
   return (
     <div className="min-h-screen pb-12">
-      <AppHeader displayName={profile?.display_name ?? "Du"} avatarUrl={profile?.avatar_url} />
+      <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
+      <AppHeader
+        displayName={profile?.display_name ?? "Du"}
+        avatarUrl={profile?.avatar_url}
+        avatarColor={profile?.avatar_color}
+      />
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
         <h1 className="text-2xl font-extrabold sm:text-3xl">Mein Profil</h1>
 
         <Card className="rounded-2xl">
           <div className="mb-4 flex items-center gap-4">
-            <Avatar name={profile?.display_name ?? "?"} url={profile?.avatar_url} size="lg" />
+            <Avatar
+              name={profile?.display_name ?? "?"}
+              url={profile?.avatar_url}
+              color={profile?.avatar_color}
+              size="lg"
+            />
             <div>
               <p className="text-lg font-bold">{profile?.display_name}</p>
               <p className="text-sm text-ink-light">{user.email}</p>
@@ -130,6 +142,13 @@ export default async function ProfilePage() {
           </div>
           <ProfileForm displayName={profile?.display_name ?? ""} />
         </Card>
+
+        {profile && (
+          <Card className="rounded-2xl">
+            <h2 className="mb-3 font-bold">Darstellung</h2>
+            <AppearanceForm profile={profile} />
+          </Card>
+        )}
 
         <Card className="rounded-2xl">
           <h2 className="mb-1 font-bold">Monatsziele</h2>

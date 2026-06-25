@@ -28,7 +28,12 @@ export function Leaderboard({
             <span className="w-6 text-center font-bold text-ink-light">
               {medals[i] ?? `#${i + 1}`}
             </span>
-            <Avatar name={entry.profile.display_name} url={entry.profile.avatar_url} size="sm" />
+            <Avatar
+              name={entry.profile.display_name}
+              url={entry.profile.avatar_url}
+              color={entry.profile.avatar_color}
+              size="sm"
+            />
             <span className="flex-1 truncate font-semibold">
               {entry.profile.display_name} {entry.isOwn && <span className="text-primary-500">(Du)</span>}
             </span>

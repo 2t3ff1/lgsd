@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateWorkspaceCard } from "@/components/CreateWorkspaceCard";
 import { MonthlyGoalCelebration } from "@/components/MonthlyGoalCelebration";
 import { WeekPreview } from "@/components/WeekPreview";
+import { UserBackground } from "@/components/UserBackground";
 import type { MonthlyGoal, Streak, Todo, Workspace } from "@/types/database";
 
 export default async function DashboardPage() {
@@ -20,7 +21,11 @@ export default async function DashboardPage() {
   if (!user) redirect("/login");
 
   const [{ data: profile }, membershipsResult] = await Promise.all([
-    supabase.from("profiles").select("display_name, avatar_url").eq("id", user.id).single(),
+    supabase
+      .from("profiles")
+      .select("display_name, avatar_url, avatar_color, background_color, background_image_url")
+      .eq("id", user.id)
+      .single(),
     supabase.from("workspace_members").select("workspace_id, workspaces(*)").eq("user_id", user.id),
   ]);
 
@@ -100,7 +105,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <AppHeader displayName={profile?.display_name ?? "Du"} avatarUrl={profile?.avatar_url} />
+      <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
+      <AppHeader
+        displayName={profile?.display_name ?? "Du"}
+        avatarUrl={profile?.avatar_url}
+        avatarColor={profile?.avatar_color}
+      />
 
       {achievedGoal && (
         <MonthlyGoalCelebration goalId={achievedGoal.id} rewardText={achievedGoal.reward_text} />
