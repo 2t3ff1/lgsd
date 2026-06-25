@@ -11,6 +11,7 @@ import { WeekPreview, type HabitStatus } from "@/components/WeekPreview";
 import { ChatBox } from "@/components/ChatBox";
 import { NudgeToast } from "@/components/NudgeToast";
 import { StreakCelebration } from "@/components/StreakCelebration";
+import { CommitmentTile } from "@/components/CommitmentTile";
 import { Button } from "@/components/ui/Button";
 import type {
   ChatMessage,
@@ -21,6 +22,7 @@ import type {
   TodoConfirmation,
   TodoProof,
   TodoReaction,
+  WeeklyCommitment,
   WeeklyGoal,
 } from "@/types/database";
 
@@ -145,6 +147,15 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     id: n.id as string,
     fromName: profilesById.get(n.from_user_id as string)?.display_name ?? "Jemand",
   }));
+
+  const { data: commitmentsRaw } = await supabase
+    .from("weekly_commitments")
+    .select("*")
+    .eq("workspace_id", params.id)
+    .eq("week_start", weekStartISO);
+
+  const commitmentsByUser = new Map<string, WeeklyCommitment>();
+  (commitmentsRaw ?? []).forEach((c) => commitmentsByUser.set(c.user_id, c as WeeklyCommitment));
 
   const [{ data: proofs }, { data: confirmations }, { data: reactionsRaw }] = await Promise.all([
     todoIds.length
@@ -275,6 +286,13 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                 streak: streakByUser.get(p.id)?.current_streak ?? 0,
                 isOwn: p.id === user.id,
               }))}
+            />
+            <CommitmentTile
+              workspaceId={workspace.id}
+              weekStart={weekStartISO}
+              members={sortedProfiles}
+              commitmentsByUser={commitmentsByUser}
+              currentUserId={user.id}
             />
             <ChatBox
               workspaceId={workspace.id}
