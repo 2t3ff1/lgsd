@@ -39,7 +39,23 @@ const STATUS_LABEL: Record<string, string> = {
   missed: "Verpasst",
 };
 
-export function WeekPreview({ todosByDate }: { todosByDate: Record<string, Todo[]> }) {
+export type HabitStatus = "done" | "missed" | "pending";
+
+const HABIT_DOT: Record<HabitStatus, string> = {
+  done: "bg-success-500",
+  missed: "bg-danger-500",
+  pending: "bg-ink-light/30",
+};
+
+export function WeekPreview({
+  todosByDate,
+  habitByDate,
+  title = "Meine nächsten 7 Tage",
+}: {
+  todosByDate: Record<string, Todo[]>;
+  habitByDate?: Record<string, HabitStatus>;
+  title?: string;
+}) {
   const [current, setCurrent] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const days = buildDays();
@@ -55,23 +71,38 @@ export function WeekPreview({ todosByDate }: { todosByDate: Record<string, Todo[
 
   return (
     <div className="mt-10">
-      <h2 className="mb-4 text-lg font-extrabold">Meine nächsten 7 Tage</h2>
+      <h2 className="mb-4 text-lg font-extrabold">{title}</h2>
 
       {/* Day tabs */}
       <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1">
-        {days.map((d, i) => (
-          <button
-            key={d.date}
-            onClick={() => setCurrent(i)}
-            className={`shrink-0 rounded-xl px-3 py-1.5 text-sm font-semibold transition-colors ${
-              i === current
-                ? "bg-primary-500 text-white"
-                : "bg-surface-muted text-ink-light hover:bg-primary-100 hover:text-primary-700 dark:hover:bg-primary-500/20"
-            }`}
-          >
-            {d.short}
-          </button>
-        ))}
+        {days.map((d, i) => {
+          const habit = habitByDate?.[d.date];
+          return (
+            <button
+              key={d.date}
+              onClick={() => setCurrent(i)}
+              className={`relative shrink-0 rounded-xl px-3 py-1.5 text-sm font-semibold transition-colors ${
+                i === current
+                  ? "bg-primary-500 text-white"
+                  : "bg-surface-muted text-ink-light hover:bg-primary-100 hover:text-primary-700 dark:hover:bg-primary-500/20"
+              }`}
+            >
+              {d.short}
+              {habit && (
+                <span
+                  className={`absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border-2 border-surface ${HABIT_DOT[habit]}`}
+                  title={
+                    habit === "done"
+                      ? "Habit erledigt"
+                      : habit === "missed"
+                        ? "Habit verpasst"
+                        : "Habit ausstehend"
+                  }
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Swipeable card */}
