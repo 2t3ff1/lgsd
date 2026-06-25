@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ProfileForm } from "@/components/ProfileForm";
 import { MonthlyGoalForm } from "@/components/MonthlyGoalForm";
 import { ReminderTimeForm } from "@/components/ReminderTimeForm";
+import { CommitmentReminderForm } from "@/components/CommitmentReminderForm";
 import { AppearanceForm } from "@/components/AppearanceForm";
 import { UserBackground } from "@/components/UserBackground";
 import { TodoHistory, type HistoryTodo } from "@/components/TodoHistory";
@@ -179,6 +180,14 @@ export default async function ProfilePage() {
         <Card className="rounded-2xl">
           <h2 className="mb-2 font-bold">Tägliche Erinnerung</h2>
           <ReminderTimeForm reminderTime={profile?.reminder_time ?? null} />
+        </Card>
+
+        <Card className="rounded-2xl">
+          <h2 className="mb-2 font-bold">Wochen-Commitment Erinnerung</h2>
+          <CommitmentReminderForm
+            day={profile?.commitment_reminder_day ?? null}
+            time={profile?.commitment_reminder_time ?? null}
+          />
         </Card>
 
         <Card className="rounded-2xl">

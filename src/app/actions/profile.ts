@@ -43,6 +43,23 @@ export async function updateReminderTime(time: string | null) {
   return { success: true };
 }
 
+export async function updateCommitmentReminder(day: number | null, time: string | null) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ commitment_reminder_day: day, commitment_reminder_time: time })
+    .eq("id", user.id);
+
+  if (error) return { error: "Erinnerung konnte nicht gespeichert werden." };
+  revalidatePath("/profile");
+  return { success: true };
+}
+
 async function uploadImage(
   supabase: ReturnType<typeof createClient>,
   userId: string,
