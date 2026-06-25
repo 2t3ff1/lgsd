@@ -4,7 +4,7 @@ import { TodoItem } from "@/components/TodoItem";
 import { AddTodoForm } from "@/components/AddTodoForm";
 import { WeeklyGoals } from "@/components/WeeklyGoals";
 import { cn } from "@/lib/utils";
-import type { Profile, Todo, TodoConfirmation, TodoProof, WeeklyGoal } from "@/types/database";
+import type { Profile, Todo, TodoConfirmation, TodoProof, TodoReaction, WeeklyGoal } from "@/types/database";
 
 export function MemberTile({
   profile,
@@ -14,6 +14,8 @@ export function MemberTile({
   todos,
   proofsByTodo,
   lastConfirmationByTodo,
+  reactionsByTodo,
+  currentUserId,
   streak,
   weeklyGoals,
   totalPoints,
@@ -26,6 +28,8 @@ export function MemberTile({
   todos: Todo[];
   proofsByTodo: Map<string, TodoProof>;
   lastConfirmationByTodo: Map<string, TodoConfirmation>;
+  reactionsByTodo?: Map<string, TodoReaction[]>;
+  currentUserId?: string;
   streak: number;
   weeklyGoals: WeeklyGoal[];
   totalPoints: number;
@@ -74,6 +78,8 @@ export function MemberTile({
               workspaceId={workspaceId}
               proof={proofsByTodo.get(todo.id)}
               lastConfirmation={lastConfirmationByTodo.get(todo.id)}
+              reactions={reactionsByTodo?.get(todo.id) ?? []}
+              currentUserId={currentUserId}
               canDelete={isOwn || isWorkspaceOwner}
             />
           ))
