@@ -9,6 +9,7 @@ import { NoteBoard } from "@/components/NoteBoard";
 import { UserBackground } from "@/components/UserBackground";
 import { WeekPreview, type HabitStatus } from "@/components/WeekPreview";
 import { ChatBox } from "@/components/ChatBox";
+import { NudgeToast } from "@/components/NudgeToast";
 import { Button } from "@/components/ui/Button";
 import type {
   ChatMessage,
@@ -131,6 +132,19 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     presenceByUser[p.user_id] = p.last_seen;
   });
 
+  const { data: unseenNudgesRaw } = await supabase
+    .from("nudges")
+    .select("id, from_user_id")
+    .eq("workspace_id", params.id)
+    .eq("to_user_id", user.id)
+    .eq("seen", false);
+
+  const profilesById = new Map(profiles.map((p) => [p.id, p]));
+  const unseenNudges = (unseenNudgesRaw ?? []).map((n) => ({
+    id: n.id as string,
+    fromName: profilesById.get(n.from_user_id as string)?.display_name ?? "Jemand",
+  }));
+
   const [{ data: proofs }, { data: confirmations }, { data: reactionsRaw }] = await Promise.all([
     todoIds.length
       ? supabase.from("todo_proof").select("*").in("todo_id", todoIds)
@@ -191,6 +205,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
   return (
     <div className="min-h-screen pb-12">
       <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
+      <NudgeToast nudges={unseenNudges} />
       <RealtimeRefresher workspaceId={workspace.id} />
       <AppHeader
         displayName={profile?.display_name ?? "Du"}
