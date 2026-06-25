@@ -8,11 +8,13 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 export function AppHeader({
   displayName,
   avatarUrl,
+  avatarColor,
   backHref,
   backLabel,
 }: {
   displayName: string;
   avatarUrl?: string | null;
+  avatarColor?: string | null;
   backHref?: string;
   backLabel?: string;
 }) {
@@ -35,7 +37,7 @@ export function AppHeader({
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <Link href="/profile" className="flex items-center gap-2">
-            <Avatar name={displayName} url={avatarUrl} size="sm" />
+            <Avatar name={displayName} url={avatarUrl} color={avatarColor} size="sm" />
             <span className="hidden text-sm font-semibold sm:inline">{displayName}</span>
           </Link>
           <form action={signOut}>

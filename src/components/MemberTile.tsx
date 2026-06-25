@@ -17,6 +17,7 @@ export function MemberTile({
   streak,
   weeklyGoals,
   totalPoints,
+  cardColor,
 }: {
   profile: Profile;
   isOwn: boolean;
@@ -28,16 +29,20 @@ export function MemberTile({
   streak: number;
   weeklyGoals: WeeklyGoal[];
   totalPoints: number;
+  cardColor?: string | null;
 }) {
   return (
     <div
       className={cn(
         "flex h-full flex-col gap-4 rounded-2xl border-2 bg-surface p-4 shadow-soft",
-        isOwn ? "border-primary-400 ring-2 ring-primary-100 dark:ring-primary-500/20" : "border-border-subtle"
+        !cardColor && (isOwn
+          ? "border-primary-400 ring-2 ring-primary-100 dark:ring-primary-500/20"
+          : "border-border-subtle")
       )}
+      style={cardColor ? { backgroundColor: cardColor, borderColor: cardColor } : undefined}
     >
       <div className="flex items-center gap-3">
-        <Avatar name={profile.display_name} url={profile.avatar_url} />
+        <Avatar name={profile.display_name} url={profile.avatar_url} color={profile.avatar_color} />
         <div className="min-w-0">
           <p className="truncate font-bold">
             {profile.display_name} {isOwn && <span className="text-primary-500">(Du)</span>}

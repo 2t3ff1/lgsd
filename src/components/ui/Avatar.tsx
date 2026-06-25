@@ -3,11 +3,13 @@ import { cn, avatarColor, getInitials } from "@/lib/utils";
 export function Avatar({
   name,
   url,
+  color,
   size = "md",
   className,
 }: {
   name: string;
   url?: string | null;
+  color?: string | null;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
@@ -32,10 +34,11 @@ export function Avatar({
     <div
       className={cn(
         "rounded-full flex items-center justify-center font-bold text-white shrink-0",
-        avatarColor(name),
+        !color && avatarColor(name),
         sizes[size],
         className
       )}
+      style={color ? { backgroundColor: color } : undefined}
     >
       {getInitials(name)}
     </div>

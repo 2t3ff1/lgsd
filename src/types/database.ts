@@ -7,9 +7,25 @@ export interface Profile {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  avatar_color: string | null;
+  background_color: string | null;
+  background_image_url: string | null;
+  card_color: string | null;
   reminder_time: string | null;
+  commitment_reminder_day: number | null;
+  commitment_reminder_time: string | null;
   created_at: string;
 }
+
+export const AVATAR_COLOR_PALETTE = [
+  "#fb7185", "#f97316", "#facc15", "#4ade80",
+  "#22d3ee", "#60a5fa", "#a78bfa", "#f472b6",
+] as const;
+
+export const CARD_COLOR_PALETTE = [
+  "#fef3c7", "#fee2e2", "#dcfce7", "#dbeafe",
+  "#ede9fe", "#fce7f3", "#e0f2fe", "#f1f5f9",
+] as const;
 
 export interface Workspace {
   id: string;
