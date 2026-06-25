@@ -15,9 +15,17 @@ export async function createTodo(workspaceId: string, formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const date = String(formData.get("date") ?? "");
   const isRecurring = formData.get("is_recurring") === "on";
-  const recurrenceType = String(formData.get("recurrence_type") ?? "") as RecurrenceType | "";
+  const recurrenceType = String(formData.get("recurrence_type") ?? "");
   const suggestedPoints = Number(formData.get("suggested_points") ?? 5);
   const scheduledTime = String(formData.get("scheduled_time") ?? "").trim() || null;
+  const recurrenceIntervalRaw = String(formData.get("recurrence_interval") ?? "").trim();
+  const recurrenceInterval =
+    isRecurring && recurrenceType === "interval" && recurrenceIntervalRaw
+      ? Math.max(1, Number(recurrenceIntervalRaw))
+      : null;
+  const recurrenceDays = isRecurring && recurrenceType === "weekdays"
+    ? formData.getAll("recurrence_days").map((d) => Number(d))
+    : null;
 
   if (!title || !date) {
     return { error: "Bitte Titel und Datum angeben." };
@@ -27,13 +35,31 @@ export async function createTodo(workspaceId: string, formData: FormData) {
     return { error: "Ungültiger Punktevorschlag." };
   }
 
+  if (isRecurring && recurrenceType === "interval" && !recurrenceInterval) {
+    return { error: "Bitte gib an, alle wie viele Tage die Aufgabe wiederholt werden soll." };
+  }
+
+  if (isRecurring && recurrenceType === "weekdays" && (!recurrenceDays || recurrenceDays.length === 0)) {
+    return { error: "Bitte waehle mindestens einen Wochentag aus." };
+  }
+
+  // "interval" und "weekdays" sind keine echten recurrence_type-Werte in der DB,
+  // sondern steuern recurrence_interval / recurrence_days. Fuer die DB-Spalte
+  // recurrence_type wird in diesen Faellen kein Basistyp gesetzt.
+  const dbRecurrenceType =
+    isRecurring && recurrenceType && recurrenceType !== "interval" && recurrenceType !== "weekdays"
+      ? (recurrenceType as RecurrenceType)
+      : null;
+
   const { error } = await supabase.from("todos").insert({
     user_id: user.id,
     workspace_id: workspaceId,
     title,
     date,
     is_recurring: isRecurring,
-    recurrence_type: isRecurring && recurrenceType ? recurrenceType : null,
+    recurrence_type: dbRecurrenceType,
+    recurrence_interval: recurrenceInterval,
+    recurrence_days: recurrenceDays,
     suggested_points: suggestedPoints,
     scheduled_time: scheduledTime,
   });
