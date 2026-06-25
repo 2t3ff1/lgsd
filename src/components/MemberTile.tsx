@@ -3,6 +3,7 @@ import { StreakBadge } from "@/components/ui/StreakBadge";
 import { TodoItem } from "@/components/TodoItem";
 import { AddTodoForm } from "@/components/AddTodoForm";
 import { WeeklyGoals } from "@/components/WeeklyGoals";
+import { NudgeButton } from "@/components/NudgeButton";
 import { cn } from "@/lib/utils";
 import type { Profile, Todo, TodoConfirmation, TodoProof, TodoReaction, WeeklyGoal } from "@/types/database";
 
@@ -47,7 +48,7 @@ export function MemberTile({
     >
       <div className="flex items-center gap-3">
         <Avatar name={profile.display_name} url={profile.avatar_url} color={profile.avatar_color} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate font-bold">
             {profile.display_name} {isOwn && <span className="text-primary-500">(Du)</span>}
           </p>
@@ -57,6 +58,9 @@ export function MemberTile({
             <span className="font-semibold text-primary-600">{totalPoints} Pkt.</span>
           </div>
         </div>
+        {!isOwn && todos.some((t) => t.status === "open") && (
+          <NudgeButton workspaceId={workspaceId} toUserId={profile.id} />
+        )}
       </div>
 
       {isOwn && <WeeklyGoals workspaceId={workspaceId} goals={weeklyGoals} />}
