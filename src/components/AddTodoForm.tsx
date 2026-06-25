@@ -48,8 +48,8 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
         <Label htmlFor={`title-${workspaceId}`}>Aufgabe</Label>
         <Input id={`title-${workspaceId}`} name="title" required placeholder="z.B. 30 Min lesen" />
       </div>
-      <div className="flex gap-2">
-        <div className="flex-1">
+      <div className="flex flex-wrap gap-2">
+        <div className="min-w-[140px] flex-1">
           <Label htmlFor={`date-${workspaceId}`}>Datum</Label>
           <Input
             id={`date-${workspaceId}`}
@@ -60,7 +60,7 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
             min={todayISO()}
           />
         </div>
-        <div>
+        <div className="min-w-[110px] flex-1">
           <Label htmlFor={`time-${workspaceId}`}>Uhrzeit</Label>
           <Input id={`time-${workspaceId}`} type="time" name="scheduled_time" />
         </div>
