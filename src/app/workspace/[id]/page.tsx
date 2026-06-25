@@ -8,8 +8,10 @@ import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { NoteBoard } from "@/components/NoteBoard";
 import { UserBackground } from "@/components/UserBackground";
 import { WeekPreview, type HabitStatus } from "@/components/WeekPreview";
+import { ChatBox } from "@/components/ChatBox";
 import { Button } from "@/components/ui/Button";
 import type {
+  ChatMessage,
   Note,
   Profile,
   Streak,
@@ -111,6 +113,22 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     .order("created_at", { ascending: false });
 
   const notes: Note[] = (notesRaw ?? []) as unknown as Note[];
+
+  const [{ data: chatRaw }, { data: presenceRaw }] = await Promise.all([
+    supabase
+      .from("chat_messages")
+      .select("*, profiles(display_name, avatar_url, avatar_color)")
+      .eq("workspace_id", params.id)
+      .order("created_at", { ascending: true })
+      .limit(50),
+    supabase.from("user_presence").select("user_id, last_seen").eq("workspace_id", params.id),
+  ]);
+
+  const chatMessages: ChatMessage[] = (chatRaw ?? []) as unknown as ChatMessage[];
+  const presenceByUser: Record<string, string> = {};
+  (presenceRaw ?? []).forEach((p) => {
+    presenceByUser[p.user_id] = p.last_seen;
+  });
 
   const [{ data: proofs }, { data: confirmations }] = await Promise.all([
     todoIds.length
@@ -214,7 +232,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
             })}
           </div>
 
-          <div className="lg:col-span-1">
+          <div className="space-y-6 lg:col-span-1">
             <Leaderboard
               entries={sortedProfiles.map((p) => ({
                 profile: p,
@@ -222,6 +240,13 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                 streak: streakByUser.get(p.id)?.current_streak ?? 0,
                 isOwn: p.id === user.id,
               }))}
+            />
+            <ChatBox
+              workspaceId={workspace.id}
+              currentUserId={user.id}
+              members={sortedProfiles}
+              initialMessages={chatMessages}
+              initialPresence={presenceByUser}
             />
           </div>
         </div>

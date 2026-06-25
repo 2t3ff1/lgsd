@@ -139,6 +139,50 @@ export interface NoteReply {
   profiles?: { display_name: string } | null;
 }
 
+export interface ChatMessage {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  profiles?: { display_name: string; avatar_url: string | null; avatar_color: string | null } | null;
+}
+
+export interface UserPresence {
+  user_id: string;
+  workspace_id: string;
+  last_seen: string;
+}
+
+export interface TodoReaction {
+  id: string;
+  todo_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+  profiles?: { display_name: string } | null;
+}
+
+export interface Nudge {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  workspace_id: string;
+  created_at: string;
+  seen: boolean;
+}
+
+export interface WeeklyCommitment {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  content: string;
+  week_start: string;
+  created_at: string;
+}
+
+export const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
+
 export interface Note {
   id: string;
   workspace_id: string;
