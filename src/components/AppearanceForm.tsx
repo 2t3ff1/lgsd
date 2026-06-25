@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { updateAppearance } from "@/app/actions/profile";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
-import { AVATAR_COLOR_PALETTE, CARD_COLOR_PALETTE } from "@/types/database";
+import { AVATAR_COLOR_PALETTE } from "@/types/database";
 import type { Profile } from "@/types/database";
 
 function ColorSwatches({
@@ -124,12 +124,24 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
 
       <div>
         <p className="mb-2 text-sm font-semibold">Farbe deiner Aufgaben-Kachel im Workspace</p>
-        <ColorSwatches
-          name="card_color"
-          palette={CARD_COLOR_PALETTE}
-          selected={cardColor}
-          onSelect={setCardColor}
-        />
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={cardColor ?? "#fef3c7"}
+            onChange={(e) => setCardColor(e.target.value)}
+            className="h-10 w-14 cursor-pointer rounded-lg border-2 border-border-subtle bg-surface p-0.5"
+          />
+          {cardColor && (
+            <button
+              type="button"
+              onClick={() => setCardColor(null)}
+              className="text-xs font-medium text-ink-light underline"
+            >
+              Zurücksetzen
+            </button>
+          )}
+          <input type="hidden" name="card_color" value={cardColor ?? ""} />
+        </div>
         <p className="mt-1 text-xs text-ink-light">Sichtbar für alle Workspace-Mitglieder.</p>
       </div>
 
