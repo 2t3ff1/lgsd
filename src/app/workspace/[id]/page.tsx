@@ -7,6 +7,7 @@ import { Leaderboard } from "@/components/Leaderboard";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { NoteBoard } from "@/components/NoteBoard";
 import { UserBackground } from "@/components/UserBackground";
+import { WeekPreview, type HabitStatus } from "@/components/WeekPreview";
 import { Button } from "@/components/ui/Button";
 import type {
   Note,
@@ -54,6 +55,10 @@ export default async function WorkspacePage({ params }: { params: { id: string }
   monday.setDate(now.getDate() + diffToMonday);
   const weekStartISO = monday.toISOString().slice(0, 10);
 
+  const weekEnd = new Date(today);
+  weekEnd.setDate(today.getDate() + 6);
+  const weekEndISO = weekEnd.toISOString().slice(0, 10);
+
   const [
     { data: todos },
     { data: streaks },
@@ -71,6 +76,30 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     supabase.from("weekly_goals").select("*").eq("workspace_id", params.id).eq("week_start", weekStartISO),
     supabase.from("points").select("user_id, amount").eq("workspace_id", params.id),
   ]);
+
+  const { data: ownWeekTodos } = await supabase
+    .from("todos")
+    .select("*")
+    .eq("workspace_id", params.id)
+    .eq("user_id", user.id)
+    .gte("date", todayISO)
+    .lte("date", weekEndISO)
+    .order("date", { ascending: true });
+
+  const ownTodosByDate: Record<string, Todo[]> = {};
+  const habitByDate: Record<string, HabitStatus> = {};
+  (ownWeekTodos ?? []).forEach((t) => {
+    const todo = t as Todo;
+    const arr = ownTodosByDate[todo.date] ?? [];
+    arr.push(todo);
+    ownTodosByDate[todo.date] = arr;
+
+    if (todo.is_recurring) {
+      if (todo.status === "confirmed") habitByDate[todo.date] = "done";
+      else if (todo.status === "missed" && habitByDate[todo.date] !== "done") habitByDate[todo.date] = "missed";
+      else if (!habitByDate[todo.date]) habitByDate[todo.date] = "pending";
+    }
+  });
 
   const allTodos: Todo[] = todos ?? [];
   const todoIds = allTodos.map((t) => t.id);
@@ -196,6 +225,12 @@ export default async function WorkspacePage({ params }: { params: { id: string }
             />
           </div>
         </div>
+
+        <WeekPreview
+          todosByDate={ownTodosByDate}
+          habitByDate={habitByDate}
+          title="Mein Kalender in diesem Workspace"
+        />
 
         <NoteBoard workspaceId={workspace.id} notes={notes} />
       </main>
