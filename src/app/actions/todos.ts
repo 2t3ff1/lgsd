@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { POINT_OPTIONS, type RecurrenceType } from "@/types/database";
+import { sendPushToUser } from "@/lib/push";
+
+const STREAK_MILESTONES = [7, 14, 30, 60, 100];
 
 export async function createTodo(workspaceId: string, formData: FormData) {
   const supabase = createClient();
@@ -158,6 +161,35 @@ export async function confirmTodo(
     return { error: "Aufgabe konnte nicht bestaetigt werden." };
   }
 
+  const { data: todo } = await supabase
+    .from("todos")
+    .select("user_id, title")
+    .eq("id", todoId)
+    .single();
+
+  if (todo) {
+    await sendPushToUser(todo.user_id, {
+      title: "✅ Aufgabe bestätigt",
+      body: `„${todo.title}“ wurde bestätigt (+${points} Punkte).`,
+      url: `/workspace/${workspaceId}`,
+    });
+
+    const { data: streak } = await supabase
+      .from("streaks")
+      .select("current_streak")
+      .eq("user_id", todo.user_id)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+
+    if (streak && STREAK_MILESTONES.includes(streak.current_streak)) {
+      await sendPushToUser(todo.user_id, {
+        title: "🔥 Streak-Meilenstein!",
+        body: `${streak.current_streak} Tage in Folge durchgezogen!`,
+        url: `/workspace/${workspaceId}`,
+      });
+    }
+  }
+
   revalidatePath(`/workspace/${workspaceId}`);
   return { success: true };
 }
@@ -211,6 +243,20 @@ export async function requestProof(workspaceId: string, todoId: string, comment:
 
   if (error) {
     return { error: "Anfrage konnte nicht gesendet werden." };
+  }
+
+  const { data: todo } = await supabase
+    .from("todos")
+    .select("user_id, title")
+    .eq("id", todoId)
+    .single();
+
+  if (todo) {
+    await sendPushToUser(todo.user_id, {
+      title: "❌ Beweis angefordert",
+      body: `Für „${todo.title}“ wurde ein Beweis angefordert.`,
+      url: `/workspace/${workspaceId}`,
+    });
   }
 
   revalidatePath(`/workspace/${workspaceId}`);

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { sendPushToUser } from "@/lib/push";
 
 export async function sendNudge(workspaceId: string, toUserId: string) {
   const supabase = createClient();
@@ -20,6 +21,18 @@ export async function sendNudge(workspaceId: string, toUserId: string) {
   if (error) {
     return { error: "Du hast diese Person heute schon angestupst." };
   }
+
+  const { data: ownProfile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .single();
+
+  await sendPushToUser(toUserId, {
+    title: "👉 Stupser erhalten",
+    body: `${ownProfile?.display_name ?? "Jemand"} hat dich angestupst!`,
+    url: `/workspace/${workspaceId}`,
+  });
 
   revalidatePath(`/workspace/${workspaceId}`);
   return { success: true };

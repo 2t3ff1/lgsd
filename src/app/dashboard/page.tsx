@@ -11,6 +11,7 @@ import { CreateWorkspaceCard } from "@/components/CreateWorkspaceCard";
 import { MonthlyGoalCelebration } from "@/components/MonthlyGoalCelebration";
 import { WeekPreview } from "@/components/WeekPreview";
 import { UserBackground } from "@/components/UserBackground";
+import { PushPermissionPrompt } from "@/components/PushPermissionPrompt";
 import type { MonthlyGoal, Streak, Todo, Workspace } from "@/types/database";
 
 export default async function DashboardPage() {
@@ -115,6 +116,8 @@ export default async function DashboardPage() {
       {achievedGoal && (
         <MonthlyGoalCelebration goalId={achievedGoal.id} rewardText={achievedGoal.reward_text} />
       )}
+
+      <PushPermissionPrompt />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <h1 className="text-2xl font-extrabold sm:text-3xl">
