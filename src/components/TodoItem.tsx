@@ -10,13 +10,14 @@ import {
   resolveShift,
   uploadProof,
 } from "@/app/actions/todos";
+import { toggleReaction } from "@/app/actions/reactions";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Textarea, Input, Label } from "@/components/ui/Input";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PointsPopup } from "@/components/PointsPopup";
 import { cn } from "@/lib/utils";
-import { POINT_OPTIONS, type Todo, type TodoConfirmation, type TodoProof } from "@/types/database";
+import { POINT_OPTIONS, type Todo, type TodoConfirmation, type TodoProof, type TodoReaction } from "@/types/database";
 
 const recurrenceLabels: Record<string, string> = {
   daily: "Täglich",
@@ -24,12 +25,16 @@ const recurrenceLabels: Record<string, string> = {
   monthly: "Monatlich",
 };
 
+const REACTION_EMOJIS = ["👍", "🎉", "🔥", "❤️", "😂", "👏"];
+
 export function TodoItem({
   todo,
   isOwn,
   workspaceId,
   proof,
   lastConfirmation,
+  reactions = [],
+  currentUserId,
   canDelete,
 }: {
   todo: Todo;
@@ -37,6 +42,8 @@ export function TodoItem({
   workspaceId: string;
   proof?: TodoProof;
   lastConfirmation?: TodoConfirmation;
+  reactions?: TodoReaction[];
+  currentUserId?: string;
   canDelete?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
@@ -53,6 +60,14 @@ export function TodoItem({
   const [selectedPoints, setSelectedPoints] = useState(todo.suggested_points);
   const [pointsReason, setPointsReason] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  function handleToggleReaction(emoji: string) {
+    setShowEmojiPicker(false);
+    startTransition(async () => {
+      await toggleReaction(workspaceId, todo.id, emoji);
+    });
+  }
 
   function handleMarkDone() {
     startTransition(async () => {
@@ -263,6 +278,60 @@ export function TodoItem({
         >
           📎 Beweis ansehen
         </a>
+      )}
+
+      {todo.status === "confirmed" && (
+        <div className="relative flex flex-wrap items-center gap-1.5 pt-1">
+          {Object.entries(
+            reactions.reduce<Record<string, TodoReaction[]>>((acc, r) => {
+              (acc[r.emoji] ??= []).push(r);
+              return acc;
+            }, {})
+          ).map(([emoji, list]) => {
+            const ownReaction = currentUserId ? list.find((r) => r.user_id === currentUserId) : undefined;
+            return (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => handleToggleReaction(emoji)}
+                disabled={pending}
+                title={list.map((r) => r.profiles?.display_name ?? "Jemand").join(", ")}
+                className={cn(
+                  "flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-xs font-semibold transition-colors",
+                  ownReaction
+                    ? "border-primary-400 bg-primary-100 dark:bg-primary-500/20"
+                    : "border-border-subtle bg-surface-muted hover:border-primary-300"
+                )}
+              >
+                <span>{emoji}</span>
+                <span>{list.length}</span>
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => setShowEmojiPicker((v) => !v)}
+            className="rounded-full border-2 border-dashed border-border-subtle px-2 py-0.5 text-xs text-ink-light hover:border-primary-300 hover:text-primary-600"
+          >
+            + 😊
+          </button>
+
+          {showEmojiPicker && (
+            <div className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-xl border-2 border-border-subtle bg-surface p-1.5 shadow-soft">
+              {REACTION_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => handleToggleReaction(emoji)}
+                  className="rounded-lg p-1 text-lg transition-transform hover:scale-125"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Eigene Aufgabe: als erledigt markieren */}

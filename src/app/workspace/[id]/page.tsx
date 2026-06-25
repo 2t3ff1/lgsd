@@ -18,6 +18,7 @@ import type {
   Todo,
   TodoConfirmation,
   TodoProof,
+  TodoReaction,
   WeeklyGoal,
 } from "@/types/database";
 
@@ -130,7 +131,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     presenceByUser[p.user_id] = p.last_seen;
   });
 
-  const [{ data: proofs }, { data: confirmations }] = await Promise.all([
+  const [{ data: proofs }, { data: confirmations }, { data: reactionsRaw }] = await Promise.all([
     todoIds.length
       ? supabase.from("todo_proof").select("*").in("todo_id", todoIds)
       : Promise.resolve({ data: [] as TodoProof[] }),
@@ -141,10 +142,21 @@ export default async function WorkspacePage({ params }: { params: { id: string }
           .in("todo_id", todoIds)
           .order("created_at", { ascending: true })
       : Promise.resolve({ data: [] as (TodoConfirmation & { profiles: { display_name: string } | null })[] }),
+    todoIds.length
+      ? supabase.from("todo_reactions").select("*, profiles(display_name)").in("todo_id", todoIds)
+      : Promise.resolve({ data: [] as TodoReaction[] }),
   ]);
 
   const proofsByTodo = new Map<string, TodoProof>();
   (proofs ?? []).forEach((p) => proofsByTodo.set(p.todo_id, p as TodoProof));
+
+  const reactionsByTodo = new Map<string, TodoReaction[]>();
+  (reactionsRaw ?? []).forEach((r) => {
+    const reaction = r as TodoReaction;
+    const list = reactionsByTodo.get(reaction.todo_id) ?? [];
+    list.push(reaction);
+    reactionsByTodo.set(reaction.todo_id, list);
+  });
 
   const lastConfirmationByTodo = new Map<string, TodoConfirmation>();
   (confirmations ?? []).forEach((c) => {
@@ -223,6 +235,8 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                   todos={memberTodos}
                   proofsByTodo={proofsByTodo}
                   lastConfirmationByTodo={lastConfirmationByTodo}
+                  reactionsByTodo={reactionsByTodo}
+                  currentUserId={user.id}
                   streak={streakByUser.get(p.id)?.current_streak ?? 0}
                   weeklyGoals={weeklyGoalsByUser.get(p.id) ?? []}
                   totalPoints={pointsByUser.get(p.id) ?? 0}
