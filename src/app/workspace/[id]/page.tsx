@@ -10,6 +10,7 @@ import { UserBackground } from "@/components/UserBackground";
 import { WeekPreview, type HabitStatus } from "@/components/WeekPreview";
 import { ChatBox } from "@/components/ChatBox";
 import { NudgeToast } from "@/components/NudgeToast";
+import { StreakCelebration } from "@/components/StreakCelebration";
 import { Button } from "@/components/ui/Button";
 import type {
   ChatMessage,
@@ -206,6 +207,11 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     <div className="min-h-screen pb-12">
       <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
       <NudgeToast nudges={unseenNudges} />
+      <StreakCelebration
+        workspaceId={workspace.id}
+        userId={user.id}
+        streak={streakByUser.get(user.id)?.current_streak ?? 0}
+      />
       <RealtimeRefresher workspaceId={workspace.id} />
       <AppHeader
         displayName={profile?.display_name ?? "Du"}
