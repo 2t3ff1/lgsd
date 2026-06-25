@@ -92,12 +92,24 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
 
       <div>
         <p className="mb-2 text-sm font-semibold">Hintergrundfarbe der App</p>
-        <ColorSwatches
-          name="background_color"
-          palette={["#fef9f3", "#f0f9ff", "#fdf4ff", "#f0fdf4", "#fffbeb", "#fef2f2"]}
-          selected={backgroundColor}
-          onSelect={setBackgroundColor}
-        />
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={backgroundColor ?? "#fef9f3"}
+            onChange={(e) => setBackgroundColor(e.target.value)}
+            className="h-10 w-14 cursor-pointer rounded-lg border-2 border-border-subtle bg-surface p-0.5"
+          />
+          {backgroundColor && (
+            <button
+              type="button"
+              onClick={() => setBackgroundColor(null)}
+              className="text-xs font-medium text-ink-light underline"
+            >
+              Zurücksetzen
+            </button>
+          )}
+          <input type="hidden" name="background_color" value={backgroundColor ?? ""} />
+        </div>
         <label className="mt-2 block text-xs font-medium text-ink-light">
           … oder eigenes Hintergrundbild hochladen
           <input
@@ -118,7 +130,7 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
           selected={cardColor}
           onSelect={setCardColor}
         />
-        <p className="mt-1 text-xs text-ink-light">Nur für dich sichtbar.</p>
+        <p className="mt-1 text-xs text-ink-light">Sichtbar für alle Workspace-Mitglieder.</p>
       </div>
 
       <div className="flex items-center gap-3">
