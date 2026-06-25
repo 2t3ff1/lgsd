@@ -272,7 +272,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                   streak={streakByUser.get(p.id)?.current_streak ?? 0}
                   weeklyGoals={weeklyGoalsByUser.get(p.id) ?? []}
                   totalPoints={pointsByUser.get(p.id) ?? 0}
-                  cardColor={isOwn ? p.card_color : null}
+                  cardColor={p.card_color}
                 />
               );
             })}
