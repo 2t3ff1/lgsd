@@ -11,13 +11,23 @@ import {
   uploadProof,
 } from "@/app/actions/todos";
 import { toggleReaction } from "@/app/actions/reactions";
+import { createSubtask } from "@/app/actions/subtasks";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Avatar } from "@/components/ui/Avatar";
 import { Textarea, Input, Label } from "@/components/ui/Input";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PointsPopup } from "@/components/PointsPopup";
+import { SubtaskRow } from "@/components/SubtaskRow";
 import { cn } from "@/lib/utils";
-import { POINT_OPTIONS, type Todo, type TodoConfirmation, type TodoProof, type TodoReaction } from "@/types/database";
+import {
+  POINT_OPTIONS,
+  type Subtask,
+  type Todo,
+  type TodoConfirmation,
+  type TodoProof,
+  type TodoReaction,
+} from "@/types/database";
 
 const recurrenceLabels: Record<string, string> = {
   daily: "Täglich",
@@ -34,6 +44,7 @@ export function TodoItem({
   proof,
   lastConfirmation,
   reactions = [],
+  subtasks = [],
   currentUserId,
   canDelete,
 }: {
@@ -43,6 +54,7 @@ export function TodoItem({
   proof?: TodoProof;
   lastConfirmation?: TodoConfirmation;
   reactions?: TodoReaction[];
+  subtasks?: Subtask[];
   currentUserId?: string;
   canDelete?: boolean;
 }) {
@@ -61,6 +73,26 @@ export function TodoItem({
   const [pointsReason, setPointsReason] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showAddSubtask, setShowAddSubtask] = useState(false);
+  const [subtaskTitle, setSubtaskTitle] = useState("");
+  const [subtaskPoints, setSubtaskPoints] = useState(5);
+
+  const hasSubtasks = subtasks.length > 0;
+
+  function handleAddSubtask() {
+    if (!subtaskTitle.trim()) return;
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.append("title", subtaskTitle.trim());
+      formData.append("suggested_points", String(subtaskPoints));
+      const res = await createSubtask(workspaceId, todo.id, formData);
+      if (!res?.error) {
+        setSubtaskTitle("");
+        setSubtaskPoints(5);
+        setShowAddSubtask(false);
+      }
+    });
+  }
 
   function handleToggleReaction(emoji: string) {
     setShowEmojiPicker(false);
@@ -217,12 +249,31 @@ export function TodoItem({
         {todo.status === "confirmed" && <Badge tone="success">Bestätigt ✅</Badge>}
         {todo.status === "rejected" && <Badge tone="accent">Beweis angefordert ❌</Badge>}
         {todo.status === "missed" && <Badge tone="danger">Verpasst (-5)</Badge>}
-        <Badge tone="neutral">{todo.suggested_points} Pkt. vorgeschlagen</Badge>
+        {hasSubtasks ? (
+          <Badge tone="neutral">Punkte = Summe der Unteraufgaben</Badge>
+        ) : (
+          <Badge tone="neutral">{todo.suggested_points} Pkt. vorgeschlagen</Badge>
+        )}
+        {todo.is_deadline_task && todo.deadline_date && (
+          <Badge tone="amber">⏳ Frist: {todo.deadline_date}</Badge>
+        )}
         {todo.shift_auto_approved && (
           <Badge tone="amber">⚠️ Automatisch verschoben (ohne Genehmigung)</Badge>
         )}
         {shiftPending && <Badge tone="amber">📅 Verschiebung beantragt</Badge>}
       </div>
+
+      {todo.status === "confirmed" && lastConfirmation?.action === "confirmed" && (
+        <div className="flex items-center gap-1.5 text-xs text-ink-light">
+          <Avatar
+            name={lastConfirmation.confirmer_name ?? "?"}
+            url={lastConfirmation.confirmer_avatar_url}
+            color={lastConfirmation.confirmer_avatar_color}
+            size="xs"
+          />
+          <span>Bestätigt von {lastConfirmation.confirmer_name ?? "Jemand"}</span>
+        </div>
+      )}
 
       {lastConfirmation?.action === "requested_proof" && (
         <p className="rounded-lg bg-accent-100 px-2 py-1.5 text-xs text-accent-700 dark:bg-accent-500/20 dark:text-accent-300">
@@ -334,8 +385,57 @@ export function TodoItem({
         </div>
       )}
 
-      {/* Eigene Aufgabe: als erledigt markieren */}
-      {isOwn && todo.status === "open" && (
+      {/* Unteraufgaben */}
+      {(hasSubtasks || isOwn) && (
+        <div className="space-y-1.5 border-l-2 border-border-subtle pl-3">
+          {subtasks.map((s) => (
+            <SubtaskRow key={s.id} subtask={s} workspaceId={workspaceId} isOwn={isOwn} canDelete={isOwn} />
+          ))}
+
+          {isOwn && todo.status !== "confirmed" && (
+            <div>
+              {!showAddSubtask ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAddSubtask(true)}
+                  className="text-xs font-semibold text-primary-600 hover:underline"
+                >
+                  + Unteraufgabe hinzufügen
+                </button>
+              ) : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Input
+                    value={subtaskTitle}
+                    onChange={(e) => setSubtaskTitle(e.target.value)}
+                    placeholder="Titel der Unteraufgabe"
+                    className="flex-1 min-w-[140px] py-1.5 text-sm"
+                  />
+                  <select
+                    value={subtaskPoints}
+                    onChange={(e) => setSubtaskPoints(Number(e.target.value))}
+                    className="rounded-xl border-2 border-border-subtle bg-surface px-2 py-1.5 text-sm"
+                  >
+                    {POINT_OPTIONS.map((p) => (
+                      <option key={p} value={p}>
+                        {p} Pkt.
+                      </option>
+                    ))}
+                  </select>
+                  <Button size="sm" onClick={handleAddSubtask} disabled={pending || !subtaskTitle.trim()}>
+                    Hinzufügen
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowAddSubtask(false)}>
+                    Abbrechen
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Eigene Aufgabe: als erledigt markieren (nicht bei Unteraufgaben - Status folgt aus diesen) */}
+      {!hasSubtasks && isOwn && todo.status === "open" && (
         <div className="space-y-2 pt-1">
           <input
             ref={fileRef}
@@ -350,7 +450,7 @@ export function TodoItem({
       )}
 
       {/* Eigene Aufgabe: Beweis nachreichen */}
-      {isOwn && todo.status === "rejected" && (
+      {!hasSubtasks && isOwn && todo.status === "rejected" && (
         <div className="space-y-2 pt-1">
           <input
             ref={fileRef}
@@ -365,7 +465,7 @@ export function TodoItem({
       )}
 
       {/* Andere Mitglieder: bestaetigen / Beweis anfordern */}
-      {!isOwn && todo.status === "pending" && (
+      {!hasSubtasks && !isOwn && todo.status === "pending" && (
         <div className="space-y-2 pt-1">
           {!showProofRequest ? (
             <div className="flex gap-2">
@@ -404,14 +504,14 @@ export function TodoItem({
       )}
 
       {/* Andere Mitglieder: nachtraegliche Bestaetigung fuer verpasste/abgelehnte Aufgaben */}
-      {!isOwn && (todo.status === "missed" || todo.status === "rejected") && (
+      {!hasSubtasks && !isOwn && (todo.status === "missed" || todo.status === "rejected") && (
         <Button size="sm" variant="outline" onClick={() => openConfirmDialog("retro")} disabled={pending} className="w-full">
           Nachträglich bestätigen
         </Button>
       )}
 
-      {/* Eigene Aufgabe: Verschiebung beantragen */}
-      {isOwn && todo.status !== "confirmed" && (
+      {/* Eigene Aufgabe: Verschiebung beantragen - nur solange offen und kein Fristdatum */}
+      {isOwn && todo.status === "open" && !todo.is_deadline_task && (
         <Button
           size="sm"
           variant="ghost"

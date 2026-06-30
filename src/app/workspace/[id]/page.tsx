@@ -18,6 +18,7 @@ import type {
   Note,
   Profile,
   Streak,
+  Subtask,
   Todo,
   TodoConfirmation,
   TodoProof,
@@ -76,8 +77,10 @@ export default async function WorkspacePage({ params }: { params: { id: string }
       .from("todos")
       .select("*")
       .eq("workspace_id", params.id)
-      .gte("date", yesterdayISO)
-      .lte("date", todayISO)
+      .or(
+        `and(date.gte.${yesterdayISO},date.lte.${todayISO}),` +
+          `and(is_deadline_task.eq.true,start_date.lte.${todayISO},deadline_date.gte.${todayISO})`
+      )
       .order("created_at", { ascending: true }),
     supabase.from("streaks").select("*").eq("workspace_id", params.id),
     supabase.from("weekly_goals").select("*").eq("workspace_id", params.id).eq("week_start", weekStartISO),
@@ -164,14 +167,30 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     todoIds.length
       ? supabase
           .from("todo_confirmations")
-          .select("*, profiles(display_name)")
+          .select("*, profiles(display_name, avatar_url, avatar_color)")
           .in("todo_id", todoIds)
           .order("created_at", { ascending: true })
-      : Promise.resolve({ data: [] as (TodoConfirmation & { profiles: { display_name: string } | null })[] }),
+      : Promise.resolve({
+          data: [] as (TodoConfirmation & {
+            profiles: { display_name: string; avatar_url: string | null; avatar_color: string | null } | null;
+          })[],
+        }),
     todoIds.length
       ? supabase.from("todo_reactions").select("*, profiles(display_name)").in("todo_id", todoIds)
       : Promise.resolve({ data: [] as TodoReaction[] }),
   ]);
+
+  const { data: subtasksRaw } = todoIds.length
+    ? await supabase.from("subtasks").select("*").in("parent_todo_id", todoIds).order("created_at", { ascending: true })
+    : { data: [] as Subtask[] };
+
+  const subtasksByTodo = new Map<string, Subtask[]>();
+  (subtasksRaw ?? []).forEach((s) => {
+    const subtask = s as Subtask;
+    const list = subtasksByTodo.get(subtask.parent_todo_id) ?? [];
+    list.push(subtask);
+    subtasksByTodo.set(subtask.parent_todo_id, list);
+  });
 
   const proofsByTodo = new Map<string, TodoProof>();
   (proofs ?? []).forEach((p) => proofsByTodo.set(p.todo_id, p as TodoProof));
@@ -186,8 +205,15 @@ export default async function WorkspacePage({ params }: { params: { id: string }
 
   const lastConfirmationByTodo = new Map<string, TodoConfirmation>();
   (confirmations ?? []).forEach((c) => {
-    const { profiles, ...rest } = c as TodoConfirmation & { profiles: { display_name: string } | null };
-    lastConfirmationByTodo.set(c.todo_id, { ...rest, confirmer_name: profiles?.display_name });
+    const { profiles, ...rest } = c as TodoConfirmation & {
+      profiles: { display_name: string; avatar_url: string | null; avatar_color: string | null } | null;
+    };
+    lastConfirmationByTodo.set(c.todo_id, {
+      ...rest,
+      confirmer_name: profiles?.display_name,
+      confirmer_avatar_url: profiles?.avatar_url,
+      confirmer_avatar_color: profiles?.avatar_color,
+    });
   });
 
   const streakByUser = new Map<string, Streak>();
@@ -246,11 +272,17 @@ export default async function WorkspacePage({ params }: { params: { id: string }
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-3 xl:grid-cols-3">
+          <div className="space-y-4 lg:col-span-3">
             {sortedProfiles.map((p) => {
               const isOwn = p.id === user.id;
               const memberTodos = allTodos.filter((t) => {
                 if (t.user_id !== p.id) return false;
+                if (t.is_deadline_task) {
+                  if (t.status === "confirmed") return false;
+                  return Boolean(
+                    t.start_date && t.deadline_date && t.start_date <= todayISO && todayISO <= t.deadline_date
+                  );
+                }
                 if (t.date === todayISO) return true;
                 // Aufgaben von gestern, die noch bestaetigt werden koennen
                 if (t.date === yesterdayISO && t.status !== "confirmed" && t.status !== "open") return true;
@@ -268,6 +300,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                   proofsByTodo={proofsByTodo}
                   lastConfirmationByTodo={lastConfirmationByTodo}
                   reactionsByTodo={reactionsByTodo}
+                  subtasksByTodo={subtasksByTodo}
                   currentUserId={user.id}
                   streak={streakByUser.get(p.id)?.current_streak ?? 0}
                   weeklyGoals={weeklyGoalsByUser.get(p.id) ?? []}
