@@ -16,8 +16,11 @@ export async function createTodo(workspaceId: string, formData: FormData) {
   if (!user) redirect("/login");
 
   const title = String(formData.get("title") ?? "").trim();
-  const date = String(formData.get("date") ?? "");
-  const isRecurring = formData.get("is_recurring") === "on";
+  const isDeadlineTask = formData.get("is_deadline_task") === "on";
+  const startDate = String(formData.get("start_date") ?? "").trim() || null;
+  const deadlineDate = String(formData.get("deadline_date") ?? "").trim() || null;
+  const date = isDeadlineTask ? deadlineDate ?? "" : String(formData.get("date") ?? "");
+  const isRecurring = !isDeadlineTask && formData.get("is_recurring") === "on";
   const recurrenceType = String(formData.get("recurrence_type") ?? "");
   const suggestedPoints = Number(formData.get("suggested_points") ?? 5);
   const scheduledTime = String(formData.get("scheduled_time") ?? "").trim() || null;
@@ -30,8 +33,19 @@ export async function createTodo(workspaceId: string, formData: FormData) {
     ? formData.getAll("recurrence_days").map((d) => Number(d))
     : null;
 
-  if (!title || !date) {
-    return { error: "Bitte Titel und Datum angeben." };
+  if (!title) {
+    return { error: "Bitte einen Titel angeben." };
+  }
+
+  if (isDeadlineTask) {
+    if (!startDate || !deadlineDate) {
+      return { error: "Bitte Start-Datum und Frist-Datum angeben." };
+    }
+    if (startDate > deadlineDate) {
+      return { error: "Das Frist-Datum muss nach dem Start-Datum liegen." };
+    }
+  } else if (!date) {
+    return { error: "Bitte ein Datum angeben." };
   }
 
   if (!POINT_OPTIONS.includes(suggestedPoints as (typeof POINT_OPTIONS)[number])) {
@@ -65,6 +79,9 @@ export async function createTodo(workspaceId: string, formData: FormData) {
     recurrence_days: recurrenceDays,
     suggested_points: suggestedPoints,
     scheduled_time: scheduledTime,
+    is_deadline_task: isDeadlineTask,
+    start_date: isDeadlineTask ? startDate : null,
+    deadline_date: isDeadlineTask ? deadlineDate : null,
   });
 
   if (error) {
@@ -201,6 +218,17 @@ export async function requestShift(
   reason: string
 ) {
   const supabase = createClient();
+
+  const { data: todo } = await supabase
+    .from("todos")
+    .select("is_deadline_task")
+    .eq("id", todoId)
+    .single();
+
+  if (todo?.is_deadline_task) {
+    return { error: "Fristaufgaben koennen nicht verschoben werden." };
+  }
+
   const { error } = await supabase.rpc("request_todo_shift", {
     _todo_id: todoId,
     _new_date: newDate,
