@@ -38,7 +38,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     supabase.from("workspaces").select("*").eq("id", params.id).maybeSingle(),
     supabase
       .from("profiles")
-      .select("display_name, avatar_url, avatar_color, background_color, background_image_url")
+      .select("display_name, avatar_url, avatar_color, background_color, background_image_url, text_color")
       .eq("id", user.id)
       .single(),
     supabase.from("workspace_members").select("user_id, profiles(*)").eq("workspace_id", params.id),
@@ -242,7 +242,11 @@ export default async function WorkspacePage({ params }: { params: { id: string }
 
   return (
     <div className="min-h-screen pb-12">
-      <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
+      <UserBackground
+        color={profile?.background_color}
+        imageUrl={profile?.background_image_url}
+        textColor={profile?.text_color}
+      />
       <NudgeToast nudges={unseenNudges} />
       <StreakCelebration
         workspaceId={workspace.id}

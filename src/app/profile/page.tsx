@@ -118,7 +118,11 @@ export default async function ProfilePage() {
 
   return (
     <div className="min-h-screen pb-12">
-      <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
+      <UserBackground
+        color={profile?.background_color}
+        imageUrl={profile?.background_image_url}
+        textColor={profile?.text_color}
+      />
       <AppHeader
         displayName={profile?.display_name ?? "Du"}
         avatarUrl={profile?.avatar_url}

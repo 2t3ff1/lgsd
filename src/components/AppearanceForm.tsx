@@ -42,6 +42,7 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
   const [avatarColor, setAvatarColor] = useState<string | null>(profile.avatar_color);
   const [cardColor, setCardColor] = useState<string | null>(profile.card_color);
   const [backgroundColor, setBackgroundColor] = useState<string | null>(profile.background_color);
+  const [textColor, setTextColor] = useState<string | null>(profile.text_color);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -120,6 +121,31 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
           />
         </label>
         <p className="mt-1 text-xs text-ink-light">Nur für dich sichtbar.</p>
+      </div>
+
+      <div>
+        <p className="mb-2 text-sm font-semibold">Textfarbe</p>
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={textColor ?? "#1f2937"}
+            onChange={(e) => setTextColor(e.target.value)}
+            className="h-10 w-14 cursor-pointer rounded-lg border-2 border-border-subtle bg-surface p-0.5"
+          />
+          {textColor && (
+            <button
+              type="button"
+              onClick={() => setTextColor(null)}
+              className="text-xs font-medium text-ink-light underline"
+            >
+              Zurücksetzen
+            </button>
+          )}
+          <input type="hidden" name="text_color" value={textColor ?? ""} />
+        </div>
+        <p className="mt-1 text-xs text-ink-light">
+          Damit Text auf eigenen Hintergrundfarben lesbar bleibt. Nur für dich sichtbar.
+        </p>
       </div>
 
       <div>
