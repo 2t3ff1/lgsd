@@ -119,6 +119,11 @@ export async function updateAppearance(formData: FormData) {
     updates.card_color = cardColor || null;
   }
 
+  const textColor = formData.get("text_color");
+  if (typeof textColor === "string") {
+    updates.text_color = textColor || null;
+  }
+
   const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
   if (error) return { error: "Darstellung konnte nicht gespeichert werden." };
 

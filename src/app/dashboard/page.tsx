@@ -24,7 +24,7 @@ export default async function DashboardPage() {
   const [{ data: profile }, membershipsResult] = await Promise.all([
     supabase
       .from("profiles")
-      .select("display_name, avatar_url, avatar_color, background_color, background_image_url")
+      .select("display_name, avatar_url, avatar_color, background_color, background_image_url, text_color")
       .eq("id", user.id)
       .single(),
     supabase.from("workspace_members").select("workspace_id, workspaces(*)").eq("user_id", user.id),
@@ -106,7 +106,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
+      <UserBackground
+        color={profile?.background_color}
+        imageUrl={profile?.background_image_url}
+        textColor={profile?.text_color}
+      />
       <AppHeader
         displayName={profile?.display_name ?? "Du"}
         avatarUrl={profile?.avatar_url}

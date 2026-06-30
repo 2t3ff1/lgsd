@@ -24,7 +24,7 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
       supabase.from("workspaces").select("*").eq("id", params.id).maybeSingle(),
       supabase
         .from("profiles")
-        .select("display_name, avatar_url, avatar_color, background_color, background_image_url")
+        .select("display_name, avatar_url, avatar_color, background_color, background_image_url, text_color")
         .eq("id", user.id)
         .single(),
       supabase
@@ -46,7 +46,11 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
 
   return (
     <div className="min-h-screen pb-12">
-      <UserBackground color={profile?.background_color} imageUrl={profile?.background_image_url} />
+      <UserBackground
+        color={profile?.background_color}
+        imageUrl={profile?.background_image_url}
+        textColor={profile?.text_color}
+      />
       <AppHeader
         displayName={profile?.display_name ?? "Du"}
         avatarUrl={profile?.avatar_url}
