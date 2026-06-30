@@ -187,7 +187,7 @@ export function TodoItem({
   return (
     <div
       className={cn(
-        "relative space-y-2 rounded-xl border-2 bg-surface p-3 transition-colors",
+        "relative space-y-1.5 rounded-xl border-2 bg-surface p-2.5 text-sm transition-colors",
         todo.status === "confirmed" && "border-success-500/40 bg-success-100/30 dark:bg-success-500/10",
         todo.status === "missed" && "border-danger-500/30 bg-danger-100/30 dark:bg-danger-500/10",
         todo.status === "rejected" && "border-accent-400/50 bg-accent-50 dark:bg-accent-500/10",
