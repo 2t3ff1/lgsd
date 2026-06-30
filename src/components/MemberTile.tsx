@@ -1,6 +1,6 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { StreakBadge } from "@/components/ui/StreakBadge";
-import { TodoItem } from "@/components/TodoItem";
+import { TodoCarousel } from "@/components/TodoCarousel";
 import { AddTodoForm } from "@/components/AddTodoForm";
 import { WeeklyGoals } from "@/components/WeeklyGoals";
 import { NudgeButton } from "@/components/NudgeButton";
@@ -67,27 +67,18 @@ export function MemberTile({
 
       {isOwn && <WeeklyGoals workspaceId={workspaceId} goals={weeklyGoals} />}
 
-      <div className="mt-4 max-h-[600px] space-y-3 overflow-y-auto pr-0.5 sm:grid sm:grid-cols-2 sm:gap-3 sm:space-y-0 lg:grid-cols-3">
-        {todos.length === 0 ? (
-          <p className="col-span-full rounded-xl bg-surface-muted px-3 py-4 text-center text-sm text-ink-light">
-            Keine Aufgaben für heute 🎉
-          </p>
-        ) : (
-          todos.map((todo) => (
-            <TodoItem
-              key={todo.id}
-              todo={todo}
-              isOwn={isOwn}
-              workspaceId={workspaceId}
-              proof={proofsByTodo.get(todo.id)}
-              lastConfirmation={lastConfirmationByTodo.get(todo.id)}
-              reactions={reactionsByTodo?.get(todo.id) ?? []}
-              subtasks={subtasksByTodo?.get(todo.id) ?? []}
-              currentUserId={currentUserId}
-              canDelete={isOwn || isWorkspaceOwner}
-            />
-          ))
-        )}
+      <div className="mt-4">
+        <TodoCarousel
+          todos={todos}
+          workspaceId={workspaceId}
+          isOwn={isOwn}
+          canDelete={isOwn || isWorkspaceOwner}
+          proofsByTodo={proofsByTodo}
+          lastConfirmationByTodo={lastConfirmationByTodo}
+          reactionsByTodo={reactionsByTodo}
+          subtasksByTodo={subtasksByTodo}
+          currentUserId={currentUserId}
+        />
       </div>
 
       {isOwn && (
