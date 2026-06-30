@@ -4,8 +4,67 @@ import { useRef, useState } from "react";
 import { updateAppearance } from "@/app/actions/profile";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
+import { ImageCropModal } from "@/components/ImageCropModal";
 import { AVATAR_COLOR_PALETTE } from "@/types/database";
 import type { Profile } from "@/types/database";
+
+function ImageUploadWithCrop({
+  label,
+  aspect,
+  outputSize,
+  previewUrl,
+  onCropped,
+}: {
+  label: string;
+  aspect: number;
+  outputSize: number;
+  previewUrl: string | null;
+  onCropped: (blob: Blob) => void;
+}) {
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setRawImageSrc(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <>
+      <label className="block text-xs font-medium text-ink-light">
+        {label}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="mt-1 block w-full text-xs"
+        />
+      </label>
+      {previewUrl && <p className="mt-1 text-xs text-success-600">Bild ausgewählt — wird beim Speichern hochgeladen.</p>}
+
+      {rawImageSrc && (
+        <ImageCropModal
+          imageSrc={rawImageSrc}
+          aspect={aspect}
+          outputSize={outputSize}
+          onConfirm={(blob) => {
+            onCropped(blob);
+            setRawImageSrc(null);
+            if (inputRef.current) inputRef.current.value = "";
+          }}
+          onCancel={() => {
+            setRawImageSrc(null);
+            if (inputRef.current) inputRef.current.value = "";
+          }}
+        />
+      )}
+    </>
+  );
+}
 
 function ColorSwatches({
   name,
@@ -43,6 +102,10 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
   const [cardColor, setCardColor] = useState<string | null>(profile.card_color);
   const [backgroundColor, setBackgroundColor] = useState<string | null>(profile.background_color);
   const [textColor, setTextColor] = useState<string | null>(profile.text_color);
+  const [avatarBlob, setAvatarBlob] = useState<Blob | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [backgroundBlob, setBackgroundBlob] = useState<Blob | null>(null);
+  const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -55,6 +118,10 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
         setLoading(true);
         setError(null);
         setSaved(false);
+        if (avatarBlob) formData.set("avatar_file", new File([avatarBlob], "avatar.jpg", { type: "image/jpeg" }));
+        if (backgroundBlob) {
+          formData.set("background_file", new File([backgroundBlob], "background.jpg", { type: "image/jpeg" }));
+        }
         const res = await updateAppearance(formData);
         if (res?.error) setError(res.error);
         else setSaved(true);
@@ -67,8 +134,8 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
         <div className="flex items-center gap-4">
           <Avatar
             name={profile.display_name}
-            url={profile.avatar_url}
-            color={avatarColor}
+            url={avatarPreview ?? profile.avatar_url}
+            color={avatarPreview ? null : avatarColor}
             size="lg"
           />
           <div className="flex-1 space-y-2">
@@ -78,15 +145,16 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
               selected={avatarColor}
               onSelect={setAvatarColor}
             />
-            <label className="block text-xs font-medium text-ink-light">
-              … oder eigenes Bild hochladen
-              <input
-                type="file"
-                name="avatar_file"
-                accept="image/*"
-                className="mt-1 block w-full text-xs"
-              />
-            </label>
+            <ImageUploadWithCrop
+              label="… oder eigenes Bild hochladen (mit Zuschnitt)"
+              aspect={1}
+              outputSize={512}
+              previewUrl={avatarPreview}
+              onCropped={(blob) => {
+                setAvatarBlob(blob);
+                setAvatarPreview(URL.createObjectURL(blob));
+              }}
+            />
           </div>
         </div>
       </div>
@@ -111,15 +179,26 @@ export function AppearanceForm({ profile }: { profile: Profile }) {
           )}
           <input type="hidden" name="background_color" value={backgroundColor ?? ""} />
         </div>
-        <label className="mt-2 block text-xs font-medium text-ink-light">
-          … oder eigenes Hintergrundbild hochladen
-          <input
-            type="file"
-            name="background_file"
-            accept="image/*"
-            className="mt-1 block w-full text-xs"
+        <div className="mt-2">
+          <ImageUploadWithCrop
+            label="… oder eigenes Hintergrundbild hochladen (mit Zuschnitt)"
+            aspect={16 / 9}
+            outputSize={1600}
+            previewUrl={backgroundPreview}
+            onCropped={(blob) => {
+              setBackgroundBlob(blob);
+              setBackgroundPreview(URL.createObjectURL(blob));
+            }}
           />
-        </label>
+        </div>
+        {backgroundPreview && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={backgroundPreview}
+            alt="Hintergrund-Vorschau"
+            className="mt-2 h-20 w-full rounded-lg object-cover"
+          />
+        )}
         <p className="mt-1 text-xs text-ink-light">Nur für dich sichtbar.</p>
       </div>
 
