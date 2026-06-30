@@ -11,6 +11,7 @@ export interface Profile {
   background_color: string | null;
   background_image_url: string | null;
   card_color: string | null;
+  text_color: string | null;
   reminder_time: string | null;
   commitment_reminder_day: number | null;
   commitment_reminder_time: string | null;
@@ -71,6 +72,22 @@ export interface Todo {
   shift_auto_approved: boolean;
   suggested_points: number;
   scheduled_time: string | null;
+  is_deadline_task: boolean;
+  start_date: string | null;
+  deadline_date: string | null;
+  created_at: string;
+}
+
+export type SubtaskStatus = "open" | "pending" | "confirmed" | "rejected" | "missed";
+
+export interface Subtask {
+  id: string;
+  parent_todo_id: string;
+  title: string;
+  suggested_points: number;
+  status: SubtaskStatus;
+  confirmed_by: string | null;
+  confirmed_points: number | null;
   created_at: string;
 }
 
@@ -89,6 +106,8 @@ export interface TodoConfirmation {
   comment: string | null;
   created_at: string;
   confirmer_name?: string;
+  confirmer_avatar_url?: string | null;
+  confirmer_avatar_color?: string | null;
 }
 
 export const POINT_OPTIONS = [1, 3, 5, 7, 9] as const;

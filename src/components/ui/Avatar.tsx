@@ -10,10 +10,11 @@ export function Avatar({
   name: string;
   url?: string | null;
   color?: string | null;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }) {
   const sizes = {
+    xs: "h-4 w-4 text-[8px]",
     sm: "h-8 w-8 text-xs",
     md: "h-11 w-11 text-sm",
     lg: "h-16 w-16 text-xl",
