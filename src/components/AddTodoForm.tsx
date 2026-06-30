@@ -21,6 +21,7 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState("daily");
+  const [isDeadlineTask, setIsDeadlineTask] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -51,6 +52,7 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
         formRef.current?.reset();
         setIsRecurring(false);
         setRecurrenceType("daily");
+        setIsDeadlineTask(false);
         setLoading(false);
         setOpen(false);
       }}
@@ -60,33 +62,74 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
         <Label htmlFor={`title-${workspaceId}`}>Aufgabe</Label>
         <Input id={`title-${workspaceId}`} name="title" required placeholder="z.B. 30 Min lesen" />
       </div>
-      <div className="flex flex-wrap gap-2">
-        <div className="min-w-[140px] flex-1">
-          <Label htmlFor={`date-${workspaceId}`}>Datum</Label>
-          <Input
-            id={`date-${workspaceId}`}
-            type="date"
-            name="date"
-            required
-            defaultValue={todayISO()}
-            min={todayISO()}
-          />
-        </div>
-        <div className="min-w-[110px] flex-1">
-          <Label htmlFor={`time-${workspaceId}`}>Uhrzeit</Label>
-          <Input id={`time-${workspaceId}`} type="time" name="scheduled_time" />
-        </div>
-      </div>
       <label className="flex items-center gap-2 text-sm font-medium">
         <input
           type="checkbox"
-          name="is_recurring"
-          checked={isRecurring}
-          onChange={(e) => setIsRecurring(e.target.checked)}
+          checked={isDeadlineTask}
+          onChange={(e) => setIsDeadlineTask(e.target.checked)}
           className="h-4 w-4 rounded border-primary-300 text-primary-500 focus:ring-primary-300"
         />
-        Wiederkehrend
+        Frist statt festes Datum
       </label>
+      <input type="hidden" name="is_deadline_task" value={isDeadlineTask ? "on" : ""} />
+
+      {isDeadlineTask ? (
+        <div className="flex flex-wrap gap-2">
+          <div className="min-w-[140px] flex-1">
+            <Label htmlFor={`start-${workspaceId}`}>Start-Datum</Label>
+            <Input
+              id={`start-${workspaceId}`}
+              type="date"
+              name="start_date"
+              required
+              defaultValue={todayISO()}
+              min={todayISO()}
+            />
+          </div>
+          <div className="min-w-[140px] flex-1">
+            <Label htmlFor={`deadline-${workspaceId}`}>Frist-Datum</Label>
+            <Input
+              id={`deadline-${workspaceId}`}
+              type="date"
+              name="deadline_date"
+              required
+              defaultValue={todayISO()}
+              min={todayISO()}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <div className="min-w-[140px] flex-1">
+            <Label htmlFor={`date-${workspaceId}`}>Datum</Label>
+            <Input
+              id={`date-${workspaceId}`}
+              type="date"
+              name="date"
+              required
+              defaultValue={todayISO()}
+              min={todayISO()}
+            />
+          </div>
+          <div className="min-w-[110px] flex-1">
+            <Label htmlFor={`time-${workspaceId}`}>Uhrzeit</Label>
+            <Input id={`time-${workspaceId}`} type="time" name="scheduled_time" />
+          </div>
+        </div>
+      )}
+
+      {!isDeadlineTask && (
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            name="is_recurring"
+            checked={isRecurring}
+            onChange={(e) => setIsRecurring(e.target.checked)}
+            className="h-4 w-4 rounded border-primary-300 text-primary-500 focus:ring-primary-300"
+          />
+          Wiederkehrend
+        </label>
+      )}
       {isRecurring && (
         <div className="space-y-2">
           <select
