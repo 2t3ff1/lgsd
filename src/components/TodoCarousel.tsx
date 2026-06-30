@@ -47,7 +47,7 @@ export function TodoCarousel({
 
   if (todos.length === 0) {
     return (
-      <div className="flex h-[420px] items-center justify-center rounded-xl bg-surface-muted px-3 text-center text-sm text-ink-light">
+      <div className="flex items-center justify-center rounded-xl bg-surface-muted px-3 py-6 text-center text-sm text-ink-light">
         Keine Aufgaben für heute 🎉
       </div>
     );
@@ -55,28 +55,26 @@ export function TodoCarousel({
 
   return (
     <div>
-      <div className="flex h-[420px] gap-3">
-        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleTodos.map((todo) => (
-            <div key={todo.id} className="overflow-y-auto pr-0.5">
-              <TodoItem
-                todo={todo}
-                isOwn={isOwn}
-                workspaceId={workspaceId}
-                proof={proofsByTodo.get(todo.id)}
-                lastConfirmation={lastConfirmationByTodo.get(todo.id)}
-                reactions={reactionsByTodo?.get(todo.id) ?? []}
-                subtasks={subtasksByTodo?.get(todo.id) ?? []}
-                currentUserId={currentUserId}
-                canDelete={canDelete}
-              />
-            </div>
-          ))}
-        </div>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        {visibleTodos.map((todo) => (
+          <div key={todo.id} className="max-h-[420px] overflow-y-auto pr-0.5">
+            <TodoItem
+              todo={todo}
+              isOwn={isOwn}
+              workspaceId={workspaceId}
+              proof={proofsByTodo.get(todo.id)}
+              lastConfirmation={lastConfirmationByTodo.get(todo.id)}
+              reactions={reactionsByTodo?.get(todo.id) ?? []}
+              subtasks={subtasksByTodo?.get(todo.id) ?? []}
+              currentUserId={currentUserId}
+              canDelete={canDelete}
+            />
+          </div>
+        ))}
       </div>
 
       {pageCount > 1 && (
-        <div className="mt-2 flex items-center justify-center gap-3">
+        <div className="mt-1 flex items-center justify-center gap-3">
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
