@@ -146,6 +146,8 @@ export interface WeeklyGoal {
   workspace_id: string;
   week_start: string;
   title: string;
+  progress: number;
+  completed: boolean;
   created_at: string;
 }
 

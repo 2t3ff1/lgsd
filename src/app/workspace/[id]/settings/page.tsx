@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { InviteMemberForm } from "@/components/InviteMemberForm";
 import { WorkspaceSettingsForm } from "@/components/WorkspaceSettingsForm";
-import { cancelInvite, leaveWorkspace, removeMember } from "@/app/actions/workspaces";
+import { cancelInvite, leaveWorkspace } from "@/app/actions/workspaces";
 import { DeleteWorkspaceButton } from "@/components/DeleteWorkspaceButton";
+import { RemoveMemberButton } from "@/components/RemoveMemberButton";
 import { UserBackground } from "@/components/UserBackground";
 import type { Profile } from "@/types/database";
 
@@ -88,11 +89,11 @@ export default async function WorkspaceSettingsPage({ params }: { params: { id: 
                     )}
                   </span>
                   {isOwner && p.id !== user.id && (
-                    <form action={removeMember.bind(null, workspace.id, p.id)}>
-                      <Button type="submit" size="sm" variant="ghost" className="text-danger-500">
-                        Entfernen
-                      </Button>
-                    </form>
+                    <RemoveMemberButton
+                      workspaceId={workspace.id}
+                      userId={p.id}
+                      displayName={p.display_name}
+                    />
                   )}
                 </li>
               );
