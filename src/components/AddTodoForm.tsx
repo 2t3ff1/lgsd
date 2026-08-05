@@ -22,6 +22,7 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState("daily");
   const [isDeadlineTask, setIsDeadlineTask] = useState(false);
+  const [suggestedPoints, setSuggestedPoints] = useState(5);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -53,6 +54,7 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
         setIsRecurring(false);
         setRecurrenceType("daily");
         setIsDeadlineTask(false);
+        setSuggestedPoints(5);
         setLoading(false);
         setOpen(false);
       }}
@@ -181,15 +183,21 @@ export function AddTodoForm({ workspaceId }: { workspaceId: string }) {
       )}
       <div>
         <Label>Punktevorschlag</Label>
+        <input type="hidden" name="suggested_points" value={suggestedPoints} />
         <div className="flex gap-1.5">
           {POINT_OPTIONS.map((p) => (
-            <label
+            <button
               key={p}
-              className="flex-1 cursor-pointer rounded-xl border-2 border-border-subtle bg-surface px-2 py-1.5 text-center text-sm font-semibold transition-colors has-[:checked]:border-primary-400 has-[:checked]:bg-primary-100 has-[:checked]:text-primary-700 dark:has-[:checked]:bg-primary-500/20"
+              type="button"
+              onClick={() => setSuggestedPoints(p)}
+              className={`flex-1 rounded-xl border-2 px-2 py-1.5 text-center text-sm font-semibold transition-colors ${
+                suggestedPoints === p
+                  ? "border-primary-400 bg-primary-100 text-primary-700 dark:bg-primary-500/20"
+                  : "border-border-subtle bg-surface"
+              }`}
             >
-              <input type="radio" name="suggested_points" value={p} defaultChecked={p === 5} className="sr-only" />
               {p}
-            </label>
+            </button>
           ))}
         </div>
       </div>

@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -81,4 +81,38 @@ export async function deleteWeeklyGoal(workspaceId: string, goalId: string) {
   await supabase.from("weekly_goals").delete().eq("id", goalId);
   revalidatePath(`/workspace/${workspaceId}`);
   revalidatePath("/profile");
+}
+
+export async function updateGoalProgress(workspaceId: string, goalId: string, progress: number) {
+  const supabase = createClient();
+  await supabase.from("weekly_goals").update({ progress: Math.max(0, Math.min(100, progress)) }).eq("id", goalId);
+  revalidatePath(`/workspace/${workspaceId}`);
+}
+
+export async function completeWeeklyGoal(workspaceId: string, goalId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: goal } = await supabase
+    .from("weekly_goals")
+    .select("title, completed")
+    .eq("id", goalId)
+    .single();
+
+  if (!goal || goal.completed) return { error: "Bereits abgeschlossen." };
+
+  await supabase.from("weekly_goals").update({ completed: true, progress: 100 }).eq("id", goalId);
+
+  await supabase.from("points").insert({
+    user_id: user.id,
+    workspace_id: workspaceId,
+    amount: 20,
+    reason: `Wochenziel erreicht: ${goal.title}`,
+  });
+
+  revalidatePath(`/workspace/${workspaceId}`);
+  return { success: true };
 }

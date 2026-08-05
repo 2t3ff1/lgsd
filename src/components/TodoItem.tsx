@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useRef, useState, useTransition } from "react";
 import {
   confirmTodo,
   deleteTodo,
+  deleteTodoForever,
   markTodoDone,
   requestProof,
   requestShift,
@@ -72,6 +73,7 @@ export function TodoItem({
   const [selectedPoints, setSelectedPoints] = useState(todo.suggested_points);
   const [pointsReason, setPointsReason] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showDeleteForeverDialog, setShowDeleteForeverDialog] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAddSubtask, setShowAddSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState("");
@@ -179,6 +181,13 @@ export function TodoItem({
     });
   }
 
+  function handleDeleteForever() {
+    startTransition(async () => {
+      await deleteTodoForever(workspaceId, todo.id);
+      setShowDeleteForeverDialog(false);
+    });
+  }
+
   const isPendingForOthers = todo.status === "pending" && !isOwn;
   const shiftLimitReached = todo.shift_count >= 3;
   const shiftPending = todo.shift_request_status === "pending";
@@ -228,13 +237,24 @@ export function TodoItem({
           </div>
         </div>
         {canDelete && (
-          <button
-            onClick={() => setShowDeleteDialog(true)}
-            className="text-xs text-ink-light hover:text-danger-500"
-            title="Löschen"
-          >
-            ✕
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={() => setShowDeleteDialog(true)}
+              className="text-xs text-ink-light hover:text-danger-500"
+              title={todo.is_recurring ? "Nur heute löschen" : "Löschen"}
+            >
+              ✕
+            </button>
+            {todo.is_recurring && (
+              <button
+                onClick={() => setShowDeleteForeverDialog(true)}
+                className="text-xs text-ink-light hover:text-danger-500"
+                title="Für immer löschen"
+              >
+                🗑
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -613,12 +633,26 @@ export function TodoItem({
 
       <ConfirmDialog
         open={showDeleteDialog}
-        title="Aufgabe löschen?"
-        description={`„${todo.title}“ wird unwiderruflich gelöscht.`}
-        confirmLabel="Löschen"
+        title={todo.is_recurring ? "Heute überspringen?" : "Aufgabe löschen?"}
+        description={
+          todo.is_recurring
+            ? `„${todo.title}" wird nur für heute gelöscht. Morgen taucht die Aufgabe wieder auf.`
+            : `„${todo.title}" wird unwiderruflich gelöscht.`
+        }
+        confirmLabel={todo.is_recurring ? "Heute löschen" : "Löschen"}
         loading={pending}
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteDialog(false)}
+      />
+
+      <ConfirmDialog
+        open={showDeleteForeverDialog}
+        title="Aufgabe für immer löschen?"
+        description={`„${todo.title}" und alle zukünftigen Wiederholungen werden unwiderruflich gelöscht.`}
+        confirmLabel="Für immer löschen"
+        loading={pending}
+        onConfirm={handleDeleteForever}
+        onCancel={() => setShowDeleteForeverDialog(false)}
       />
     </div>
   );

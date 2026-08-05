@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -98,6 +98,21 @@ export async function deleteTodo(workspaceId: string, todoId: string) {
   revalidatePath(`/workspace/${workspaceId}`);
 }
 
+export async function deleteTodoForever(workspaceId: string, todoId: string) {
+  const supabase = createClient();
+  const { data: todo } = await supabase
+    .from("todos")
+    .select("recurrence_parent_id")
+    .eq("id", todoId)
+    .single();
+  const parentId = todo?.recurrence_parent_id ?? todoId;
+  await supabase
+    .from("todos")
+    .delete()
+    .or(`id.eq.${parentId},recurrence_parent_id.eq.${parentId}`);
+  revalidatePath(`/workspace/${workspaceId}`);
+}
+
 export async function markTodoDone(workspaceId: string, todoId: string) {
   const supabase = createClient();
   const { error } = await supabase.rpc("mark_todo_done", { _todo_id: todoId });
@@ -187,7 +202,7 @@ export async function confirmTodo(
   if (todo) {
     await sendPushToUser(todo.user_id, {
       title: "✅ Aufgabe bestätigt",
-      body: `„${todo.title}“ wurde bestätigt (+${points} Punkte).`,
+      body: `„${todo.title}" wurde bestätigt (+${points} Punkte).`,
       url: `/workspace/${workspaceId}`,
     });
 
@@ -282,7 +297,7 @@ export async function requestProof(workspaceId: string, todoId: string, comment:
   if (todo) {
     await sendPushToUser(todo.user_id, {
       title: "❌ Beweis angefordert",
-      body: `Für „${todo.title}“ wurde ein Beweis angefordert.`,
+      body: `Für „${todo.title}" wurde ein Beweis angefordert.`,
       url: `/workspace/${workspaceId}`,
     });
   }

@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
@@ -7,14 +7,11 @@ import { Leaderboard } from "@/components/Leaderboard";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { NoteBoard } from "@/components/NoteBoard";
 import { UserBackground } from "@/components/UserBackground";
-import { WeekPreview, type HabitStatus } from "@/components/WeekPreview";
-import { ChatBox } from "@/components/ChatBox";
 import { NudgeToast } from "@/components/NudgeToast";
 import { StreakCelebration } from "@/components/StreakCelebration";
-import { CommitmentTile } from "@/components/CommitmentTile";
+import { MonthCalendar } from "@/components/MonthCalendar";
 import { Button } from "@/components/ui/Button";
 import type {
-  ChatMessage,
   Note,
   Profile,
   Streak,
@@ -23,7 +20,6 @@ import type {
   TodoConfirmation,
   TodoProof,
   TodoReaction,
-  WeeklyCommitment,
   WeeklyGoal,
 } from "@/types/database";
 
@@ -38,7 +34,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     supabase.from("workspaces").select("*").eq("id", params.id).maybeSingle(),
     supabase
       .from("profiles")
-      .select("display_name, avatar_url, avatar_color, background_color, background_image_url, text_color")
+      .select("display_name, avatar_url, avatar_color, background_color, background_image_url, text_color, card_color")
       .eq("id", user.id)
       .single(),
     supabase.from("workspace_members").select("user_id, profiles(*)").eq("workspace_id", params.id),
@@ -63,15 +59,18 @@ export default async function WorkspacePage({ params }: { params: { id: string }
   monday.setDate(now.getDate() + diffToMonday);
   const weekStartISO = monday.toISOString().slice(0, 10);
 
-  const weekEnd = new Date(today);
-  weekEnd.setDate(today.getDate() + 6);
-  const weekEndISO = weekEnd.toISOString().slice(0, 10);
+  // Calendar: current month range for own todos
+  const calMonth = today.getMonth() + 1;
+  const calYear = today.getFullYear();
+  const calFirstDay = `${calYear}-${String(calMonth).padStart(2, "0")}-01`;
+  const calLastDay = new Date(calYear, calMonth, 0).toISOString().slice(0, 10);
 
   const [
     { data: todos },
     { data: streaks },
     { data: weeklyGoals },
     { data: allPoints },
+    { data: calTodosRaw },
   ] = await Promise.all([
     supabase
       .from("todos")
@@ -85,31 +84,15 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     supabase.from("streaks").select("*").eq("workspace_id", params.id),
     supabase.from("weekly_goals").select("*").eq("workspace_id", params.id).eq("week_start", weekStartISO),
     supabase.from("points").select("user_id, amount").eq("workspace_id", params.id),
+    supabase
+      .from("todos")
+      .select("id, title, date, status, is_recurring")
+      .eq("workspace_id", params.id)
+      .eq("user_id", user.id)
+      .gte("date", calFirstDay)
+      .lte("date", calLastDay)
+      .order("date", { ascending: true }),
   ]);
-
-  const { data: ownWeekTodos } = await supabase
-    .from("todos")
-    .select("*")
-    .eq("workspace_id", params.id)
-    .eq("user_id", user.id)
-    .gte("date", todayISO)
-    .lte("date", weekEndISO)
-    .order("date", { ascending: true });
-
-  const ownTodosByDate: Record<string, Todo[]> = {};
-  const habitByDate: Record<string, HabitStatus> = {};
-  (ownWeekTodos ?? []).forEach((t) => {
-    const todo = t as Todo;
-    const arr = ownTodosByDate[todo.date] ?? [];
-    arr.push(todo);
-    ownTodosByDate[todo.date] = arr;
-
-    if (todo.is_recurring) {
-      if (todo.status === "confirmed") habitByDate[todo.date] = "done";
-      else if (todo.status === "missed" && habitByDate[todo.date] !== "done") habitByDate[todo.date] = "missed";
-      else if (!habitByDate[todo.date]) habitByDate[todo.date] = "pending";
-    }
-  });
 
   const allTodos: Todo[] = todos ?? [];
   const todoIds = allTodos.map((t) => t.id);
@@ -121,22 +104,6 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     .order("created_at", { ascending: false });
 
   const notes: Note[] = (notesRaw ?? []) as unknown as Note[];
-
-  const [{ data: chatRaw }, { data: presenceRaw }] = await Promise.all([
-    supabase
-      .from("chat_messages")
-      .select("*, profiles(display_name, avatar_url, avatar_color)")
-      .eq("workspace_id", params.id)
-      .order("created_at", { ascending: true })
-      .limit(50),
-    supabase.from("user_presence").select("user_id, last_seen").eq("workspace_id", params.id),
-  ]);
-
-  const chatMessages: ChatMessage[] = (chatRaw ?? []) as unknown as ChatMessage[];
-  const presenceByUser: Record<string, string> = {};
-  (presenceRaw ?? []).forEach((p) => {
-    presenceByUser[p.user_id] = p.last_seen;
-  });
 
   const { data: unseenNudgesRaw } = await supabase
     .from("nudges")
@@ -150,15 +117,6 @@ export default async function WorkspacePage({ params }: { params: { id: string }
     id: n.id as string,
     fromName: profilesById.get(n.from_user_id as string)?.display_name ?? "Jemand",
   }));
-
-  const { data: commitmentsRaw } = await supabase
-    .from("weekly_commitments")
-    .select("*")
-    .eq("workspace_id", params.id)
-    .eq("week_start", weekStartISO);
-
-  const commitmentsByUser = new Map<string, WeeklyCommitment>();
-  (commitmentsRaw ?? []).forEach((c) => commitmentsByUser.set(c.user_id, c as WeeklyCommitment));
 
   const [{ data: proofs }, { data: confirmations }, { data: reactionsRaw }] = await Promise.all([
     todoIds.length
@@ -309,7 +267,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                   streak={streakByUser.get(p.id)?.current_streak ?? 0}
                   weeklyGoals={weeklyGoalsByUser.get(p.id) ?? []}
                   totalPoints={pointsByUser.get(p.id) ?? 0}
-                  cardColor={p.card_color}
+                  cardColor={isOwn ? profile?.card_color : null}
                 />
               );
             })}
@@ -324,28 +282,12 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                 isOwn: p.id === user.id,
               }))}
             />
-            <CommitmentTile
+            <MonthCalendar
               workspaceId={workspace.id}
-              weekStart={weekStartISO}
-              members={sortedProfiles}
-              commitmentsByUser={commitmentsByUser}
-              currentUserId={user.id}
-            />
-            <ChatBox
-              workspaceId={workspace.id}
-              currentUserId={user.id}
-              members={sortedProfiles}
-              initialMessages={chatMessages}
-              initialPresence={presenceByUser}
+              initialTodos={calTodosRaw ?? []}
             />
           </div>
         </div>
-
-        <WeekPreview
-          todosByDate={ownTodosByDate}
-          habitByDate={habitByDate}
-          title="Mein Kalender in diesem Workspace"
-        />
 
         <NoteBoard workspaceId={workspace.id} notes={notes} />
       </main>
