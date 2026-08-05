@@ -122,8 +122,8 @@ function createPetWindow(baseUrl) {
   const y = saved?.y ?? sh - 260;
 
   petWindow = new BrowserWindow({
-    width: 160,
-    height: 220,
+    width: 104,
+    height: 120,
     x,
     y,
     transparent: true,
@@ -209,6 +209,10 @@ function setupIPC() {
   ipcMain.handle("pet:get-position", () => loadPetPosition());
 
   ipcMain.handle("pet:set-position", (_, { x, y }) => savePetPosition({ x, y }));
+
+  ipcMain.on("pet:move-window", (_, { x, y }) => {
+    if (petWindow) petWindow.setPosition(Math.round(x), Math.round(y));
+  });
 
   ipcMain.handle("pet:resize", (_, { w, h }) => {
     if (!petWindow) return;
