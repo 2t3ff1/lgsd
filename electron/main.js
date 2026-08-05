@@ -115,11 +115,26 @@ function createMainWindow(baseUrl) {
   mainWindow.on("closed", () => { mainWindow = null; });
 }
 
+function clampToWorkArea(x, y, w, h) {
+  const { screen } = require("electron");
+  const display = screen.getDisplayNearestPoint({ x, y });
+  const { x: dx, y: dy, width: dw, height: dh } = display.workArea;
+  return {
+    x: Math.max(dx, Math.min(dx + dw - w, x)),
+    y: Math.max(dy, Math.min(dy + dh - h, y)),
+  };
+}
+
 function createPetWindow(baseUrl) {
   const saved = loadPetPosition();
   const { width: sw, height: sh } = require("electron").screen.getPrimaryDisplay().workAreaSize;
-  const x = saved?.x ?? sw - 200;
-  const y = saved?.y ?? sh - 260;
+  let x = sw - 200;
+  let y = sh - 260;
+  if (saved) {
+    const clamped = clampToWorkArea(saved.x, saved.y, 104, 120);
+    x = clamped.x;
+    y = clamped.y;
+  }
 
   petWindow = new BrowserWindow({
     width: 104,
@@ -210,8 +225,32 @@ function setupIPC() {
 
   ipcMain.handle("pet:set-position", (_, { x, y }) => savePetPosition({ x, y }));
 
+  ipcMain.handle("pet:get-window-pos", () => {
+    if (!petWindow) return null;
+    const [x, y] = petWindow.getPosition();
+    return { x, y };
+  });
+
   ipcMain.on("pet:move-window", (_, { x, y }) => {
     if (petWindow) petWindow.setPosition(Math.round(x), Math.round(y));
+  });
+
+  ipcMain.on("pet:move-delta", (_, { dx, dy }) => {
+    if (!petWindow) return;
+    const [x, y] = petWindow.getPosition();
+    petWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
+  });
+
+  ipcMain.on("pet:show", () => {
+    if (petWindow) petWindow.show();
+  });
+
+  ipcMain.on("pet:hide", () => {
+    if (petWindow) petWindow.hide();
+  });
+
+  ipcMain.handle("pet:is-visible", () => {
+    return petWindow ? petWindow.isVisible() : false;
   });
 
   ipcMain.handle("pet:resize", (_, { w, h }) => {

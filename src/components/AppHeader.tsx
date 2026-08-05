@@ -4,6 +4,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { signOut } from "@/app/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PetToggleButton } from "@/components/PetToggleButton";
 
 export function AppHeader({
   displayName,
@@ -35,6 +36,7 @@ export function AppHeader({
           )}
         </div>
         <div className="flex items-center gap-3">
+          <PetToggleButton />
           <ThemeToggle />
           <Link href="/profile" className="flex items-center gap-2">
             <Avatar name={displayName} url={avatarUrl} color={avatarColor} size="sm" />
