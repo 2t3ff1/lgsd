@@ -9,6 +9,7 @@ import { MonthlyGoalForm } from "@/components/MonthlyGoalForm";
 import { ReminderTimeForm } from "@/components/ReminderTimeForm";
 import { CommitmentReminderForm } from "@/components/CommitmentReminderForm";
 import { AppearanceForm } from "@/components/AppearanceForm";
+import { PetSelector } from "@/components/PetSelector";
 import { UserBackground } from "@/components/UserBackground";
 import { TodoHistory, type HistoryTodo } from "@/components/TodoHistory";
 import { formatDate } from "@/lib/utils";
@@ -174,6 +175,14 @@ export default async function ProfilePage() {
               ))}
             </div>
           )}
+        </Card>
+
+        <Card className="rounded-2xl">
+          <h2 className="mb-2 font-bold">Desktop-Begleittier</h2>
+          <p className="mb-4 text-sm text-ink-light">
+            Wähle ein Tier für die Desktop-App — es sitzt immer oben auf deinem Bildschirm.
+          </p>
+          <PetSelector currentPetType={profile?.pet_type ?? null} />
         </Card>
 
         <Card className="rounded-2xl">

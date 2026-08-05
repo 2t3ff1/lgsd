@@ -15,6 +15,7 @@ export interface Profile {
   reminder_time: string | null;
   commitment_reminder_day: number | null;
   commitment_reminder_time: string | null;
+  pet_type: string | null;
   created_at: string;
 }
 
@@ -173,6 +174,8 @@ export interface UserPresence {
   user_id: string;
   workspace_id: string;
   last_seen: string;
+  is_working: boolean;
+  pet_type: string | null;
 }
 
 export interface TodoReaction {
