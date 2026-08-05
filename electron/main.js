@@ -11,6 +11,8 @@ let tray = null;
 let nextProcess = null;
 let serverPort = 3000;
 let isQuitting = false;
+let popupWindow = null;
+let appBaseUrl = null;
 
 // ── Server startup ──────────────────────────────────────────────────────────
 
@@ -117,11 +119,12 @@ function createMainWindow(baseUrl) {
 
 function clampToWorkArea(x, y, w, h) {
   const { screen } = require("electron");
-  const display = screen.getDisplayNearestPoint({ x, y });
-  const { x: dx, y: dy, width: dw, height: dh } = display.workArea;
+  const display = screen.getDisplayNearestPoint({ x: x + Math.floor(w / 2), y: y + Math.floor(h / 2) });
+  const wa = display.workArea;
+  // At least half the window must remain on screen
   return {
-    x: Math.max(dx, Math.min(dx + dw - w, x)),
-    y: Math.max(dy, Math.min(dy + dh - h, y)),
+    x: Math.max(wa.x - Math.floor(w / 2), Math.min(wa.x + wa.width - Math.ceil(w / 2), x)),
+    y: Math.max(wa.y - Math.floor(h / 2), Math.min(wa.y + wa.height - Math.ceil(h / 2), y)),
   };
 }
 
@@ -163,6 +166,46 @@ function createPetWindow(baseUrl) {
   });
 
   petWindow.on("closed", () => { petWindow = null; });
+}
+
+// ── Popup window ─────────────────────────────────────────────────────────────
+
+function openPopupWindow() {
+  if (!appBaseUrl || !petWindow) return;
+  if (popupWindow && !popupWindow.isDestroyed()) {
+    popupWindow.focus();
+    return;
+  }
+  const [petX, petY] = petWindow.getPosition();
+  const [petW, petH] = petWindow.getSize();
+  const popupW = 380, popupH = 500;
+  const { screen } = require("electron");
+  const display = screen.getDisplayNearestPoint({ x: petX + Math.floor(petW / 2), y: petY });
+  const wa = display.workArea;
+
+  // Center popup above pet; fall back to below if insufficient space
+  let px = petX + Math.floor(petW / 2) - Math.floor(popupW / 2);
+  let py = petY - popupH - 8;
+  if (py < wa.y) py = petY + petH + 8;
+  px = Math.max(wa.x, Math.min(wa.x + wa.width - popupW, px));
+  py = Math.max(wa.y, Math.min(wa.y + wa.height - popupH, py));
+
+  popupWindow = new BrowserWindow({
+    width: popupW, height: popupH, x: px, y: py,
+    transparent: true, frame: false, alwaysOnTop: true,
+    resizable: false, skipTaskbar: true, hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload-popup.js"),
+      contextIsolation: true, nodeIntegration: false,
+    },
+  });
+  popupWindow.loadURL(`${appBaseUrl}/pet-popup`);
+  popupWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
+  popupWindow.on("closed", () => { popupWindow = null; });
+}
+
+function closePopupWindow() {
+  if (popupWindow && !popupWindow.isDestroyed()) popupWindow.close();
 }
 
 // ── Tray ─────────────────────────────────────────────────────────────────────
@@ -238,7 +281,15 @@ function setupIPC() {
   ipcMain.on("pet:move-delta", (_, { dx, dy }) => {
     if (!petWindow) return;
     const [x, y] = petWindow.getPosition();
-    petWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
+    const [w, h] = petWindow.getSize();
+    const clamped = clampToWorkArea(x + dx, y + dy, w, h);
+    petWindow.setPosition(clamped.x, clamped.y);
+  });
+
+  ipcMain.on("pet:open-popup", () => openPopupWindow());
+  ipcMain.on("popup:close", () => closePopupWindow());
+  ipcMain.on("popup:todo-done", () => {
+    if (petWindow) petWindow.webContents.send("pet:trigger-dance");
   });
 
   ipcMain.on("pet:show", () => {
@@ -288,12 +339,11 @@ function setupAutoUpdater() {
 app.whenReady().then(async () => {
   setupIPC();
 
-  let baseUrl;
   if (isDev) {
-    baseUrl = "http://localhost:3000";
+    appBaseUrl = "http://localhost:3000";
   } else {
     try {
-      baseUrl = await startNextServer();
+      appBaseUrl = await startNextServer();
     } catch (err) {
       console.error("Failed to start server:", err);
       app.quit();
@@ -301,9 +351,9 @@ app.whenReady().then(async () => {
     }
   }
 
-  createMainWindow(baseUrl);
-  createPetWindow(baseUrl);
-  createTray(baseUrl);
+  createMainWindow(appBaseUrl);
+  createPetWindow(appBaseUrl);
+  createTray(appBaseUrl);
   setupAutoUpdater();
 });
 
