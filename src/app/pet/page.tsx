@@ -9,10 +9,11 @@ import type { PetType, PetState } from "@/components/pet/Animals";
 const INACTIVITY_MS = 10 * 60 * 1000;
 const DANCE_MS = 4000;
 const DEFAULT_PET: PetType = "cat";
-const PET_W = 160;
-const PET_H = 230;
+const PET_W = 104;
+const PET_H = 120;
 const POPUP_W = 380;
 const POPUP_H = 500;
+const DRAG_THRESHOLD = 4; // px movement to distinguish click from drag
 
 type PresenceRow = {
   user_id: string;
@@ -43,6 +44,15 @@ export default function PetPage() {
   const dancingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isElectron = typeof window !== "undefined" && typeof window.electronPet !== "undefined";
+
+  // drag tracking
+  const dragRef = useRef<{
+    startClientX: number;
+    startClientY: number;
+    startWinX: number;
+    startWinY: number;
+    moved: boolean;
+  } | null>(null);
 
   const triggerDance = useCallback(() => {
     setPetState("dancing");
@@ -194,16 +204,62 @@ export default function PetPage() {
     setToggling(false);
   }
 
-  async function handlePetClick() {
-    if (showPopup) {
-      setShowPopup(false);
-      if (isElectron) window.electronPet!.resize(PET_W, PET_H);
-      return;
-    }
+  async function openPopup() {
     const { todos: data } = await getTodayTodos();
     setTodos(data);
     setShowPopup(true);
     if (isElectron) window.electronPet!.resize(POPUP_W, POPUP_H);
+  }
+
+  function closePopup() {
+    setShowPopup(false);
+    if (isElectron) window.electronPet!.resize(PET_W, PET_H);
+  }
+
+  // Pointer-based drag: distinguishes click vs drag by movement threshold
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!isElectron || showPopup) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = {
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startWinX: window.screenX,
+      startWinY: window.screenY,
+      moved: false,
+    };
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startClientX;
+    const dy = e.clientY - dragRef.current.startClientY;
+    if (!dragRef.current.moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+      dragRef.current.moved = true;
+    }
+    if (dragRef.current.moved) {
+      window.electronPet!.moveWindow(
+        Math.round(dragRef.current.startWinX + dx),
+        Math.round(dragRef.current.startWinY + dy)
+      );
+    }
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragRef.current) return;
+    const { moved, startWinX, startWinY, startClientX, startClientY } = dragRef.current;
+    dragRef.current = null;
+
+    if (!moved) {
+      // treat as click
+      if (showPopup) closePopup();
+      else openPopup();
+    } else {
+      // save final position
+      const finalX = startWinX + (e.clientX - startClientX);
+      const finalY = startWinY + (e.clientY - startClientY);
+      window.electronPet!.setPosition(finalX, finalY);
+      try { localStorage.setItem("lgsd-pet-pos", JSON.stringify({ x: finalX, y: finalY })); } catch {}
+    }
   }
 
   async function markDone(todoId: string) {
@@ -224,15 +280,15 @@ export default function PetPage() {
   return (
     <div
       style={{
-        width: isElectron ? (showPopup ? POPUP_W : PET_W) : "100%",
-        minHeight: isElectron ? (showPopup ? POPUP_H : PET_H) : "100vh",
+        width: isElectron ? (showPopup ? POPUP_W : PET_W) : 380,
+        minHeight: isElectron ? (showPopup ? POPUP_H : PET_H) : 500,
         background: "transparent",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "flex-end",
         fontFamily: "system-ui, sans-serif",
-        paddingBottom: 8,
+        paddingBottom: 6,
       }}
     >
       {/* todo popup */}
@@ -272,7 +328,7 @@ export default function PetPage() {
               )}
             </div>
             <button
-              onClick={handlePetClick}
+              onClick={closePopup}
               style={{
                 background: "rgba(255,255,255,0.08)",
                 border: "none",
@@ -383,62 +439,70 @@ export default function PetPage() {
         </div>
       )}
 
-      {/* other active pets */}
+      {/* other active pets — mini row above */}
       {otherPets.length > 0 && !showPopup && (
-        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+        <div style={{ display: "flex", gap: 3, marginBottom: 2, justifyContent: "center" }}>
           {otherPets.slice(0, 3).map((p) => (
             <div key={p.user_id} style={{ textAlign: "center" }}>
-              <PetAnimal type={(p.pet_type ?? "cat") as PetType} state="active" size={36} />
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.7)", maxWidth: 40, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {p.display_name}
-              </div>
+              <PetAnimal type={(p.pet_type ?? "cat") as PetType} state="active" size={24} />
             </div>
           ))}
         </div>
       )}
 
-      {/* main pet — drag handle (the whole top area) + clickable pet */}
+      {/* pet + controls — drag from anywhere except the working button */}
       <div
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          WebkitAppRegion: "drag",
-        } as React.CSSProperties}
+          cursor: "grab",
+          userSelect: "none",
+          paddingBottom: 4,
+        }}
       >
-        <div
-          onClick={handlePetClick}
-          style={{ cursor: "pointer", WebkitAppRegion: "no-drag" } as React.CSSProperties}
-          title="Klicken für Aufgaben"
-        >
-          <PetAnimal type={petType} state={petState} size={110} />
-        </div>
+        <PetAnimal type={petType} state={petState} size={56} />
 
         {userName && (
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", marginTop: -2, fontWeight: 600 }}>
+          <div style={{
+            fontSize: 9,
+            color: "rgba(255,255,255,0.75)",
+            marginTop: 1,
+            fontWeight: 700,
+            letterSpacing: 0.3,
+            maxWidth: 90,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
             {userName}
           </div>
         )}
 
         <button
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={handleToggleWorking}
           disabled={toggling}
           style={{
-            marginTop: 6,
-            padding: "4px 12px",
+            marginTop: 4,
+            padding: "2px 10px",
             borderRadius: 20,
             border: "none",
-            background: isWorking ? "rgba(34,197,94,0.85)" : "rgba(255,255,255,0.15)",
+            background: isWorking ? "rgba(34,197,94,0.85)" : "rgba(255,255,255,0.14)",
             color: "white",
-            fontSize: 12,
-            fontWeight: 600,
+            fontSize: 10,
+            fontWeight: 700,
             cursor: toggling ? "default" : "pointer",
             backdropFilter: "blur(8px)",
-            WebkitAppRegion: "no-drag",
+            WebkitBackdropFilter: "blur(8px)",
             transition: "background 0.2s",
+            letterSpacing: 0.2,
           } as React.CSSProperties}
         >
-          {isWorking ? "✅ Arbeite" : "☕ Arbeite jetzt"}
+          {isWorking ? "✅ aktiv" : "☕ los"}
         </button>
       </div>
     </div>
