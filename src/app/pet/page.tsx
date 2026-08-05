@@ -43,14 +43,18 @@ export default function PetPage() {
   const lastActivityRef = useRef(Date.now());
   const dancingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isElectron = typeof window !== "undefined" && typeof window.electronPet !== "undefined";
+  const [isElectron, setIsElectron] = useState(false);
 
-  // drag tracking
+  useEffect(() => {
+    setIsElectron(typeof window.electronPet !== "undefined");
+  }, []);
+
+  // drag tracking — uses delta movement to avoid window.screenX offset issues on Windows
   const dragRef = useRef<{
     startClientX: number;
     startClientY: number;
-    startWinX: number;
-    startWinY: number;
+    lastClientX: number;
+    lastClientY: number;
     moved: boolean;
   } | null>(null);
 
@@ -216,49 +220,52 @@ export default function PetPage() {
     if (isElectron) window.electronPet!.resize(PET_W, PET_H);
   }
 
-  // Pointer-based drag: distinguishes click vs drag by movement threshold
+  // Pointer-based drag using deltas — avoids window.screenX offset issues on Windows transparent windows
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!isElectron || showPopup) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = {
       startClientX: e.clientX,
       startClientY: e.clientY,
-      startWinX: window.screenX,
-      startWinY: window.screenY,
+      lastClientX: e.clientX,
+      lastClientY: e.clientY,
       moved: false,
     };
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!dragRef.current) return;
-    const dx = e.clientX - dragRef.current.startClientX;
-    const dy = e.clientY - dragRef.current.startClientY;
-    if (!dragRef.current.moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+    const absDx = e.clientX - dragRef.current.startClientX;
+    const absDy = e.clientY - dragRef.current.startClientY;
+    if (!dragRef.current.moved && (Math.abs(absDx) > DRAG_THRESHOLD || Math.abs(absDy) > DRAG_THRESHOLD)) {
       dragRef.current.moved = true;
     }
     if (dragRef.current.moved) {
-      window.electronPet!.moveWindow(
-        Math.round(dragRef.current.startWinX + dx),
-        Math.round(dragRef.current.startWinY + dy)
-      );
+      const dx = e.clientX - dragRef.current.lastClientX;
+      const dy = e.clientY - dragRef.current.lastClientY;
+      if (dx !== 0 || dy !== 0) {
+        window.electronPet!.moveDelta(Math.round(dx), Math.round(dy));
+        dragRef.current.lastClientX = e.clientX;
+        dragRef.current.lastClientY = e.clientY;
+      }
     }
   }
 
-  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+  function handlePointerUp() {
     if (!dragRef.current) return;
-    const { moved, startWinX, startWinY, startClientX, startClientY } = dragRef.current;
+    const moved = dragRef.current.moved;
     dragRef.current = null;
 
     if (!moved) {
-      // treat as click
       if (showPopup) closePopup();
       else openPopup();
     } else {
-      // save final position
-      const finalX = startWinX + (e.clientX - startClientX);
-      const finalY = startWinY + (e.clientY - startClientY);
-      window.electronPet!.setPosition(finalX, finalY);
-      try { localStorage.setItem("lgsd-pet-pos", JSON.stringify({ x: finalX, y: finalY })); } catch {}
+      // Save final position using actual window coords from main process
+      void window.electronPet!.getWindowPos().then((pos) => {
+        if (!pos) return;
+        window.electronPet!.setPosition(pos.x, pos.y);
+        try { localStorage.setItem("lgsd-pet-pos", JSON.stringify(pos)); } catch {}
+      });
     }
   }
 
