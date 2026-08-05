@@ -3,7 +3,7 @@ export const metadata = { title: "LGSD Pet" };
 export default function PetLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         html, body {
           background: transparent !important;
           overflow: hidden !important;
@@ -12,7 +12,7 @@ export default function PetLayout({ children }: { children: React.ReactNode }) {
           -webkit-user-select: none !important;
           user-select: none !important;
         }
-      `}</style>
+      `}} />
       {children}
     </>
   );

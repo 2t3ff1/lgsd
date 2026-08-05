@@ -466,7 +466,8 @@ export function PetAnimal({ type, state, size = 80 }: {
       shapeRendering="crispEdges"
       overflow="visible"
     >
-      <style>{STYLES}</style>
+      {/* dangerouslySetInnerHTML bypasses React 18.3 style-hoisting which breaks SVG inline styles */}
+      <style dangerouslySetInnerHTML={{ __html: STYLES }} />
       <Animal state={state} />
     </svg>
   );
