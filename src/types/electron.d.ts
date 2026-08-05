@@ -9,6 +9,7 @@ declare global {
       resize: (w: number, h: number) => Promise<void>;
       moveWindow: (x: number, y: number) => void;
       moveDelta: (dx: number, dy: number) => void;
+      openPopup: () => void;
       platform: string;
     };
     electronApp?: {
@@ -17,6 +18,11 @@ declare global {
       showPet: () => void;
       hidePet: () => void;
       isPetVisible: () => Promise<boolean>;
+    };
+    electronPopup?: {
+      close: () => void;
+      markDone: () => void;
+      platform: string;
     };
   }
 }
