@@ -2,8 +2,8 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
-import { MemberTile } from "@/components/MemberTile";
 import { Leaderboard } from "@/components/Leaderboard";
+import { SortableMemberGrid } from "@/components/SortableMemberGrid";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { NoteBoard } from "@/components/NoteBoard";
 import { UserBackground } from "@/components/UserBackground";
@@ -234,43 +234,41 @@ export default async function WorkspacePage({ params }: { params: { id: string }
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-          <div className="space-y-4 lg:col-span-3">
-            {sortedProfiles.map((p) => {
-              const isOwn = p.id === user.id;
-              const memberTodos = allTodos.filter((t) => {
-                if (t.user_id !== p.id) return false;
-                if (t.is_deadline_task) {
-                  if (t.status === "confirmed") return false;
-                  return Boolean(
-                    t.start_date && t.deadline_date && t.start_date <= todayISO && todayISO <= t.deadline_date
-                  );
-                }
-                if (t.date === todayISO) return true;
-                // Aufgaben von gestern, die noch bestaetigt werden koennen
-                if (t.date === yesterdayISO && t.status !== "confirmed" && t.status !== "open") return true;
-                return false;
-              });
-
-              return (
-                <MemberTile
-                  key={p.id}
-                  profile={p}
-                  isOwn={isOwn}
-                  isWorkspaceOwner={isWorkspaceOwner}
-                  workspaceId={workspace.id}
-                  todos={memberTodos}
-                  proofsByTodo={proofsByTodo}
-                  lastConfirmationByTodo={lastConfirmationByTodo}
-                  reactionsByTodo={reactionsByTodo}
-                  subtasksByTodo={subtasksByTodo}
-                  currentUserId={user.id}
-                  streak={streakByUser.get(p.id)?.current_streak ?? 0}
-                  weeklyGoals={weeklyGoalsByUser.get(p.id) ?? []}
-                  totalPoints={pointsByUser.get(p.id) ?? 0}
-                  cardColor={isOwn ? profile?.card_color : null}
-                />
-              );
-            })}
+          <div className="lg:col-span-3">
+            <SortableMemberGrid
+              storageKey={`lgsd-tile-order-${workspace.id}-${user.id}`}
+              tiles={sortedProfiles.map((p) => {
+                const isOwn = p.id === user.id;
+                const memberTodos = allTodos.filter((t) => {
+                  if (t.user_id !== p.id) return false;
+                  if (t.is_deadline_task) {
+                    if (t.status === "confirmed") return false;
+                    return Boolean(
+                      t.start_date && t.deadline_date && t.start_date <= todayISO && todayISO <= t.deadline_date
+                    );
+                  }
+                  if (t.date === todayISO) return true;
+                  if (t.date === yesterdayISO && t.status !== "confirmed" && t.status !== "open") return true;
+                  return false;
+                });
+                return {
+                  profile: p,
+                  isOwn,
+                  isWorkspaceOwner,
+                  workspaceId: workspace.id,
+                  todos: memberTodos,
+                  proofsByTodo,
+                  lastConfirmationByTodo,
+                  reactionsByTodo,
+                  subtasksByTodo,
+                  currentUserId: user.id,
+                  streak: streakByUser.get(p.id)?.current_streak ?? 0,
+                  weeklyGoals: weeklyGoalsByUser.get(p.id) ?? [],
+                  totalPoints: pointsByUser.get(p.id) ?? 0,
+                  cardColor: isOwn ? profile?.card_color : null,
+                };
+              })}
+            />
           </div>
 
           <div className="space-y-6 lg:col-span-1">

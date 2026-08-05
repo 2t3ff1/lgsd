@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -67,13 +67,31 @@ export async function inviteMember(workspaceId: string, formData: FormData) {
 
 export async function removeMember(workspaceId: string, userId: string) {
   const supabase = createClient();
-  await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: workspace } = await supabase
+    .from("workspaces")
+    .select("created_by")
+    .eq("id", workspaceId)
+    .maybeSingle();
+
+  if (!workspace || workspace.created_by !== user.id) {
+    return { error: "Nur der Workspace-Admin kann Mitglieder entfernen." };
+  }
+
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createAdminClient();
+  await admin
     .from("workspace_members")
     .delete()
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId);
 
   revalidatePath(`/workspace/${workspaceId}/settings`);
+  revalidatePath(`/workspace/${workspaceId}`);
 }
 
 export async function cancelInvite(workspaceId: string, inviteId: string) {
