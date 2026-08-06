@@ -1,42 +1,9 @@
-// ── Early crash logger (runs before Electron APIs are available) ──────────────
-const fs = require("fs");
-const path = require("path");
-const os = require("os");
-
-const earlyLogPath = path.join(os.homedir(), "lgsd-debug.log");
-function earlyLog(msg) {
-  try { fs.appendFileSync(earlyLogPath, `[${new Date().toISOString()}] ${msg}\n`); } catch {}
-}
-try { fs.writeFileSync(earlyLogPath, `=== lgsd-debug (${new Date().toISOString()}) ===\n`); } catch {}
-earlyLog("require('electron') starting…");
-
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell } = require("electron");
-earlyLog("electron loaded");
+const path = require("path");
+const fs = require("fs");
 const http = require("http");
 
 const isDev = !app.isPackaged;
-earlyLog(`isDev=${isDev}  execPath=${process.execPath}  resourcesPath=${process.resourcesPath || "(none yet)"}`);
-earlyLog(`__dirname=${__dirname}`);
-
-// ── Error logging ─────────────────────────────────────────────────────────────
-
-const logPath = path.join(app.getPath("userData"), "lgsd.log");
-
-function log(msg) {
-  const line = `[${new Date().toISOString()}] ${msg}\n`;
-  try { fs.appendFileSync(logPath, line); } catch {}
-  console.log(line.trim());
-}
-
-// Clear log on each fresh start so it doesn't grow unbounded
-try { fs.writeFileSync(logPath, `=== LGSD started (isDev=${isDev}) ===\n`); } catch {}
-
-process.on("uncaughtException", (err) => {
-  log(`uncaughtException: ${err.stack || err}`);
-});
-process.on("unhandledRejection", (reason) => {
-  log(`unhandledRejection: ${reason instanceof Error ? reason.stack : reason}`);
-});
 let mainWindow = null;
 let petWindow = null;
 let tray = null;
@@ -57,23 +24,16 @@ function findFreePort() {
   });
 }
 
-function waitForServer(port, retries = 40) {
+function waitForServer(port, retries = 30) {
   return new Promise((resolve, reject) => {
     let attempts = 0;
     const check = () => {
-      // Use 127.0.0.1 explicitly — on Windows, "localhost" may resolve to ::1
-      const req = http.get({ hostname: "127.0.0.1", port, path: "/" }, () => {
-        earlyLog(`waitForServer: responded after ${attempts} attempts`);
+      const req = http.get(`http://localhost:${port}/`, (res) => {
         resolve();
       });
-      req.setTimeout(1000, () => req.destroy());
-      req.on("error", (err) => {
-        if (++attempts < retries) {
-          setTimeout(check, 500);
-        } else {
-          earlyLog(`waitForServer: timed out after ${attempts} attempts — ${err.message}`);
-          reject(new Error(`Server did not start in time: ${err.message}`));
-        }
+      req.on("error", () => {
+        if (++attempts < retries) setTimeout(check, 500);
+        else reject(new Error("Server did not start in time"));
       });
       req.end();
     };
@@ -83,48 +43,17 @@ function waitForServer(port, retries = 40) {
 
 async function startNextServer() {
   serverPort = await findFreePort();
-  earlyLog(`findFreePort done: port=${serverPort}`);
-
   const appDir = path.join(process.resourcesPath, "app");
   const serverScript = path.join(appDir, "server.js");
 
-  earlyLog(`appDir=${appDir}  exists=${fs.existsSync(appDir)}`);
-  earlyLog(`serverScript=${serverScript}  exists=${fs.existsSync(serverScript)}`);
-
-  // List what's actually in resources/ to diagnose wrong paths
-  try {
-    const resDir = process.resourcesPath;
-    earlyLog(`resources/ contents: ${fs.readdirSync(resDir).join(", ")}`);
-    if (fs.existsSync(appDir)) {
-      earlyLog(`resources/app/ contents: ${fs.readdirSync(appDir).join(", ")}`);
-    }
-  } catch (e) { earlyLog(`readdir error: ${e.message}`); }
-
-  if (!fs.existsSync(serverScript)) {
-    const msg = `server.js not found at:\n${serverScript}\n\nresourcesPath=${process.resourcesPath}`;
-    earlyLog(`FATAL: ${msg}`);
-    const { dialog } = require("electron");
-    dialog.showErrorBox("LGSD – Server nicht gefunden", msg);
-    app.quit();
-    throw new Error(msg);
-  }
-
-  log(`port=${serverPort}  appDir=${appDir}  script=${serverScript}`);
-
+  // Run the Next.js standalone server in-process — avoids spawning a child
+  // process and eliminates all spawn ENOENT issues on Windows.
   process.env.PORT = String(serverPort);
   process.env.NODE_ENV = "production";
   process.env.HOSTNAME = "127.0.0.1";
-  earlyLog("calling require(serverScript)…");
-  try {
-    require(serverScript);
-  } catch (e) {
-    earlyLog(`require(serverScript) threw: ${e.stack || e}`);
-    throw e;
-  }
-  earlyLog("require returned – waiting for server…");
+  require(serverScript);
 
   await waitForServer(serverPort);
-  earlyLog(`server ready at port ${serverPort}`);
   return `http://localhost:${serverPort}`;
 }
 
@@ -386,97 +315,38 @@ function setupAutoUpdater() {
   if (isDev) return;
   try {
     const { autoUpdater } = require("electron-updater");
-    const { dialog } = require("electron");
-
-    autoUpdater.logger = { info: log, warn: log, error: log, debug: () => {} };
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-
-    autoUpdater.on("checking-for-update", () => log("updater: checking for update"));
-    autoUpdater.on("update-available", (info) => log(`updater: update available — ${info.version}`));
-    autoUpdater.on("update-not-available", () => log("updater: up to date"));
-    autoUpdater.on("error", (err) => log(`updater error: ${err.message}`));
-    autoUpdater.on("download-progress", (p) =>
-      log(`updater: downloading ${Math.round(p.percent)}%`)
-    );
-
-    autoUpdater.on("update-downloaded", (info) => {
-      log(`updater: downloaded ${info.version} — prompting user`);
-
-      // Notify the renderer so it can show an in-app banner if desired
-      if (mainWindow && !mainWindow.isDestroyed()) {
+    autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.on("update-downloaded", () => {
+      if (mainWindow) {
         mainWindow.webContents.executeJavaScript(
-          `window.dispatchEvent(new CustomEvent('electron-update-ready', { detail: '${info.version}' }))`
+          `window.dispatchEvent(new CustomEvent('electron-update-ready'))`
         );
       }
-
-      // Show a native dialog asking whether to restart now
-      dialog
-        .showMessageBox({
-          type: "info",
-          title: "Update verfügbar",
-          message: `Version ${info.version} wurde heruntergeladen.`,
-          detail: "Soll die App jetzt neu gestartet werden um das Update zu installieren?",
-          buttons: ["Jetzt neu starten", "Später"],
-          defaultId: 0,
-          cancelId: 1,
-        })
-        .then(({ response }) => {
-          if (response === 0) {
-            isQuitting = true;
-            autoUpdater.quitAndInstall(false, true);
-          }
-        });
     });
-
-    autoUpdater.checkForUpdates().catch((err) => log(`updater: checkForUpdates failed — ${err.message}`));
-  } catch (err) {
-    log(`setupAutoUpdater error: ${err.message}`);
-  }
-}
-
-// ── Single-instance lock ──────────────────────────────────────────────────────
-
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-  // Another instance is already running — bring its window to front and exit
-  app.quit();
-} else {
-  app.on("second-instance", () => {
-    if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
-  });
+  } catch {}
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  try {
-    log("app ready");
-    setupIPC();
-    log("IPC ready");
+  setupIPC();
 
-    if (isDev) {
-      appBaseUrl = "http://localhost:3000";
-      log("dev mode – skipping server start");
-    } else {
-      log("starting Next.js server…");
+  if (isDev) {
+    appBaseUrl = "http://localhost:3000";
+  } else {
+    try {
       appBaseUrl = await startNextServer();
-      log(`server ready at ${appBaseUrl}`);
+    } catch (err) {
+      console.error("Failed to start server:", err);
+      app.quit();
+      return;
     }
-
-    log("creating windows…");
-    createMainWindow(appBaseUrl);
-    log("main window created");
-    createPetWindow(appBaseUrl);
-    log("pet window created");
-    createTray(appBaseUrl);
-    log("tray created");
-    setupAutoUpdater();
-    log("startup complete");
-  } catch (err) {
-    log(`FATAL in whenReady: ${err.stack || err}`);
-    app.quit();
   }
+
+  createMainWindow(appBaseUrl);
+  createPetWindow(appBaseUrl);
+  createTray(appBaseUrl);
+  setupAutoUpdater();
 });
 
 app.on("window-all-closed", (e) => {

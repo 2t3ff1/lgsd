@@ -10,8 +10,10 @@ const INACTIVITY_MS = 10 * 60 * 1000;
 const DANCE_MS = 4000;
 const DEFAULT_PET: PetType = "cat";
 const PET_W = 104;
-const PET_H = 120;
+const PET_H = 148; // taller to avoid clipping animations and other-pets row
 const DRAG_THRESHOLD = 4;
+const OTHER_PET_SIZE = 28;
+const OTHER_PET_GAP = 4;
 
 type PresenceRow = {
   user_id: string;
@@ -29,6 +31,7 @@ export default function PetPage() {
   const [toggling, setToggling] = useState(false);
   const [userName, setUserName] = useState("");
   const [isElectron, setIsElectron] = useState(false);
+  const [windowW, setWindowW] = useState(PET_W);
 
   const lastActivityRef = useRef(Date.now());
   const dancingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,6 +51,18 @@ export default function PetPage() {
   useEffect(() => {
     setIsElectron(typeof window.electronPet !== "undefined");
   }, []);
+
+  // Resize window to fit other pets side-by-side
+  useEffect(() => {
+    if (!isElectron) return;
+    const count = otherPets.length;
+    // extra width needed for the other-pets row
+    const rowW = count > 0 ? count * OTHER_PET_SIZE + (count - 1) * OTHER_PET_GAP + 8 : 0;
+    const needed = Math.max(PET_W, rowW);
+    setWindowW(needed);
+    window.electronPet!.resize(needed, PET_H);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otherPets.length, isElectron]);
 
   // Cancel any pending rAF on unmount
   useEffect(() => {
@@ -71,8 +86,21 @@ export default function PetPage() {
     return () => window.removeEventListener("pet-trigger-dance", handler);
   }, [triggerDance]);
 
-  // Activity tracking → sleeping after inactivity
+  // Activity tracking → sleeping after inactivity, only while working
   useEffect(() => {
+    if (inactivityTimerRef.current) {
+      clearInterval(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+    }
+
+    if (!isWorking) {
+      // Not working → always sleeping, no timer
+      setPetState((prev) => (prev === "dancing" ? prev : "sleeping"));
+      return;
+    }
+
+    // Working → reset activity clock and watch for inactivity
+    lastActivityRef.current = Date.now();
     const bump = () => { lastActivityRef.current = Date.now(); };
     window.addEventListener("mousemove", bump);
     window.addEventListener("keydown", bump);
@@ -90,7 +118,7 @@ export default function PetPage() {
       window.removeEventListener("keydown", bump);
       if (inactivityTimerRef.current) clearInterval(inactivityTimerRef.current);
     };
-  }, []);
+  }, [isWorking]);
 
   // Load user + pet type + is_working
   useEffect(() => {
@@ -264,7 +292,7 @@ export default function PetPage() {
   return (
     <div
       style={{
-        width: isElectron ? PET_W : 380,
+        width: isElectron ? windowW : 380,
         minHeight: isElectron ? PET_H : 500,
         background: "transparent",
         display: "flex",
@@ -273,14 +301,29 @@ export default function PetPage() {
         justifyContent: "flex-end",
         fontFamily: "system-ui, sans-serif",
         paddingBottom: 6,
+        overflow: "visible",
       }}
     >
-      {/* other active pets — mini row above */}
+      {/* other active pets — horizontal row above own pet */}
       {otherPets.length > 0 && (
-        <div style={{ display: "flex", gap: 3, marginBottom: 2, justifyContent: "center" }}>
-          {otherPets.slice(0, 3).map((p) => (
-            <div key={p.user_id} style={{ textAlign: "center" }}>
-              <PetAnimal type={(p.pet_type ?? "cat") as PetType} state="active" size={24} />
+        <div style={{
+          display: "flex",
+          flexDirection: "row",
+          flexWrap: "nowrap",
+          gap: OTHER_PET_GAP,
+          marginBottom: 4,
+          justifyContent: "center",
+          alignItems: "flex-end",
+          overflow: "visible",
+        }}>
+          {otherPets.slice(0, 5).map((p) => (
+            <div key={p.user_id} style={{ display: "flex", flexDirection: "column", alignItems: "center", overflow: "visible" }}>
+              <PetAnimal type={(p.pet_type ?? "cat") as PetType} state="active" size={OTHER_PET_SIZE} />
+              {p.display_name && (
+                <span style={{ fontSize: 7, color: "rgba(255,255,255,0.6)", marginTop: 1, maxWidth: OTHER_PET_SIZE + 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {p.display_name}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -298,6 +341,7 @@ export default function PetPage() {
           cursor: "grab",
           userSelect: "none",
           paddingBottom: 4,
+          overflow: "visible",
         }}
       >
         <PetAnimal type={petType} state={petState} size={56} />

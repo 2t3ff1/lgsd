@@ -68,55 +68,71 @@ function Notes({ x, y }: { x: number; y: number }) {
   );
 }
 
-// ─── CAT 🐱 ──────────────────────────────────────────────────────────────────
-// palette: C=orange D=dark-orange P=ear-pink O=pupil N=nose
+// ─── CAT 🐱 (Schildpatt: orange/schwarz/weiß patches, runder Körper) ──────────
 function Cat({ state }: { state: PetState }) {
   const s = state === "sleeping";
-  const C = "#F4A030", D = "#C07820", P = "#FFBFCF", O = "#1A1010", N = "#FF7090";
+  // Schildpatt palette: O=orange, B=black patch, W=white, P=ear-pink, N=nose
+  const O = "#E8890C", B = "#2A1A0A", W = "#F8F4EE", P = "#F9A8C9", N = "#FF5577";
 
   const body: R[] = [
-    // left ear
-    px(2, 0, C), px(2, 1, C), px(3, 1, P), px(2, 2, C), px(3, 2, C), px(3, 2, P),
+    // left ear (pointy)
+    px(2, 0, O), px(3, 0, O),
+    px(2, 1, O), px(3, 1, P), px(4, 1, O),
     // right ear
-    px(13, 0, C), px(12, 1, C), px(13, 1, P), px(12, 2, C), px(13, 2, C), px(12, 2, P),
-    // head rows 2-9
-    px(2, 2, C, 12, 1), px(2, 3, C, 12, 6), px(2, 9, C, 12, 1),
-    // chin/neck
-    px(3, 10, C, 10, 1), px(4, 11, C, 8, 1),
+    px(12, 0, B), px(13, 0, B),
+    px(11, 1, B), px(12, 1, P), px(13, 1, B),
+    // head - round
+    px(2, 2, O, 12, 1),
+    px(1, 3, O, 14, 1),
+    px(1, 4, O, 14, 5),
+    px(1, 9, O, 14, 1),
+    // tortoiseshell patches on head
+    px(2, 3, B, 3, 2), px(6, 4, B, 2, 2), px(10, 3, W, 3, 3),
+    px(3, 6, W, 2, 2), px(7, 5, O, 3, 2), px(11, 6, B, 2, 2),
+    // chin white
+    px(5, 9, W, 6, 1),
+    // neck
+    px(4, 10, O, 8, 1), px(5, 11, O, 6, 1),
     // body
-    px(3, 12, C, 10, 4),
+    px(3, 12, O, 10, 4),
+    // body patches
+    px(4, 12, B, 3, 2), px(9, 13, W, 3, 2), px(7, 12, O, 2, 1),
     // paws
-    px(3, 14, D, 3, 2), px(10, 14, D, 3, 2),
-    // tail (right)
-    px(13, 13, D), px(14, 12, D), px(14, 11, D), px(15, 10, D), px(15, 9, D),
+    px(3, 15, W, 3, 1), px(10, 15, W, 3, 1),
+    px(3, 14, B, 2, 1), px(11, 14, B, 2, 1),
+    // tail curl (right side)
+    px(13, 11, O), px(14, 10, O), px(15, 9, O), px(15, 10, O), px(14, 11, O),
     // nose
     px(7, 7, N), px(8, 7, N),
     // mouth
     px(6, 8, N), px(9, 8, N),
     // whiskers
-    px(0, 7, "#BBB"), px(1, 7, "#BBB"), px(14, 7, "#BBB"), px(15, 7, "#BBB"),
-    px(0, 8, "#BBB"), px(1, 8, "#BBB"), px(14, 8, "#BBB"), px(15, 8, "#BBB"),
+    px(0, 7, "#CCC", 2, 1), px(14, 7, "#CCC", 2, 1),
+    px(0, 8, "#CCC", 2, 1), px(14, 8, "#CCC", 2, 1),
   ];
 
   return (
     <g className={`pa-${state}`}>
       <Rects cells={body} />
-      {/* eyes */}
       {!s && (
         <>
-          <rect x={4} y={5} width={2} height={2} fill={O} />
-          <rect x={10} y={5} width={2} height={2} fill={O} />
-          <rect x={5} y={5} width={1} height={1} fill="white" />
-          <rect x={11} y={5} width={1} height={1} fill="white" />
+          {/* big round eyes */}
+          <rect x={3} y={4} width={3} height={3} fill={B} />
+          <rect x={10} y={4} width={3} height={3} fill={B} />
+          {/* pupils */}
+          <rect x={4} y={4} width={2} height={3} fill="#1A3A1A" />
+          <rect x={11} y={4} width={2} height={3} fill="#1A3A1A" />
+          {/* shine */}
+          <rect x={4} y={4} width={1} height={1} fill="white" />
+          <rect x={11} y={4} width={1} height={1} fill="white" />
         </>
       )}
       {s && (
         <>
-          <rect x={3} y={6} width={4} height={1} fill={O} />
-          <rect x={9} y={6} width={4} height={1} fill={O} />
+          <rect x={2} y={6} width={5} height={1} fill={B} />
+          <rect x={9} y={6} width={5} height={1} fill={B} />
         </>
       )}
-      {/* smile when dancing */}
       {state === "dancing" && (
         <>
           <rect x={6} y={8} width={1} height={1} fill={N} />
@@ -124,8 +140,8 @@ function Cat({ state }: { state: PetState }) {
           <rect x={9} y={8} width={1} height={1} fill={N} />
         </>
       )}
-      {s && <ZZZ x={13} y={2} />}
-      {state === "dancing" && <Notes x={13} y={3} />}
+      {s && <ZZZ x={13} y={1} />}
+      {state === "dancing" && <Notes x={13} y={2} />}
     </g>
   );
 }
@@ -184,36 +200,39 @@ function Dog({ state }: { state: PetState }) {
   );
 }
 
-// ─── FOX 🦊 ──────────────────────────────────────────────────────────────────
+// ─── FOX 🦊 (orange, sitzend, gelbe Ohrenspitzen, weißes Gesicht, pink Nase) ──
 function Fox({ state }: { state: PetState }) {
   const s = state === "sleeping";
-  const C = "#E0601A", D = "#1A1010", W = "#F5F5F0", N = "#1A1010";
+  const C = "#E8640A", Y = "#FFD84A", W = "#F8F4EE", D = "#1A0A00", N = "#FF6688";
 
   const body: R[] = [
-    // left ear (pointy, dark tip)
-    px(1, 0, D), px(2, 0, D), px(1, 1, D), px(2, 1, C), px(3, 1, C),
+    // left ear — orange base, yellow tip
+    px(2, 0, Y), px(3, 0, Y),
+    px(1, 1, Y), px(2, 1, C), px(3, 1, C),
     px(1, 2, C), px(2, 2, C), px(3, 2, C), px(4, 2, C),
     // right ear
-    px(13, 0, D), px(14, 0, D), px(12, 1, C), px(13, 1, C), px(14, 1, D),
+    px(12, 0, Y), px(13, 0, Y),
+    px(12, 1, C), px(13, 1, C), px(14, 1, Y),
     px(11, 2, C), px(12, 2, C), px(13, 2, C), px(14, 2, C),
-    // head
-    px(2, 2, C, 12, 9),
-    // white cheek/snout area
-    px(3, 6, W, 10, 5),
-    // snout tip (darker)
-    px(6, 9, N, 4, 1),
+    // head (round)
+    px(2, 2, C, 12, 1),
+    px(1, 3, C, 14, 7),
+    px(2, 10, C, 12, 1),
+    // white face mask
+    px(3, 5, W, 10, 5),
+    px(4, 4, W, 8, 1),
+    // nose
+    px(7, 8, N, 2, 1),
     // body
     px(2, 11, C, 12, 5),
     // white chest
-    px(5, 12, W, 6, 3),
-    // paws
+    px(5, 12, W, 6, 4),
+    // paws (dark)
     px(2, 15, D, 4, 1), px(10, 15, D, 4, 1),
-    // tail hint (right)
-    px(13, 12, C, 3, 4), px(14, 11, C, 2, 2),
-    // tail white tip
-    px(14, 15, W, 2, 1),
-    // nose
-    px(7, 8, D, 2, 1),
+    // fluffy tail (right)
+    px(13, 10, C, 3, 5), px(14, 9, C, 2, 2),
+    // white tail tip
+    px(13, 15, W, 3, 1), px(14, 14, W, 2, 1),
   ];
 
   return (
@@ -221,16 +240,16 @@ function Fox({ state }: { state: PetState }) {
       <Rects cells={body} />
       {!s && (
         <>
-          <rect x={4} y={4} width={3} height={2} fill={D} />
-          <rect x={9} y={4} width={3} height={2} fill={D} />
+          <rect x={4} y={4} width={3} height={3} fill={D} />
+          <rect x={9} y={4} width={3} height={3} fill={D} />
           <rect x={5} y={4} width={1} height={1} fill="white" />
           <rect x={10} y={4} width={1} height={1} fill="white" />
         </>
       )}
       {s && (
         <>
-          <rect x={3} y={5} width={4} height={1} fill={D} />
-          <rect x={9} y={5} width={4} height={1} fill={D} />
+          <rect x={3} y={6} width={4} height={1} fill={D} />
+          <rect x={9} y={6} width={4} height={1} fill={D} />
         </>
       )}
       {s && <ZZZ x={14} y={1} />}
@@ -239,30 +258,36 @@ function Fox({ state }: { state: PetState }) {
   );
 }
 
-// ─── RABBIT 🐰 ────────────────────────────────────────────────────────────────
+// ─── RABBIT 🐰 (weiß, sehr lange Ohren mit rosa Innen, minimalistisch) ────────
 function Rabbit({ state }: { state: PetState }) {
   const s = state === "sleeping";
-  const C = "#F0EAD6", D = "#C8BCAA", P = "#FFB0C8", O = "#1A1010", N = "#FF88AA";
+  const C = "#F5F2EC", D = "#D8D0C0", P = "#F9A8C9", O = "#2A1A1A", N = "#FF88AA";
 
   const body: R[] = [
-    // left ear (tall, thin)
-    px(4, 0, C, 3, 6), px(5, 0, P, 1, 5),
-    // right ear
-    px(9, 0, C, 3, 6), px(10, 0, P, 1, 5),
-    // head
-    px(2, 5, C, 12, 7),
-    // face shading
-    px(3, 6, D, 1, 1), px(12, 6, D, 1, 1),
+    // very long left ear
+    px(4, 0, C, 3, 8), px(5, 0, P, 1, 7),
+    px(3, 1, C, 1, 4),
+    // very long right ear
+    px(9, 0, C, 3, 8), px(10, 0, P, 1, 7),
+    px(12, 1, C, 1, 4),
+    // head (round oval)
+    px(2, 6, C, 12, 6),
+    px(1, 7, C, 14, 4),
+    px(2, 11, C, 12, 1),
+    // body (oval)
+    px(2, 12, C, 12, 4),
+    px(3, 11, C, 10, 1),
+    px(3, 16, D, 10, 1),
+    // subtle shading on sides
+    px(2, 8, D, 1, 3), px(13, 8, D, 1, 3),
     // nose
     px(7, 9, N, 2, 1),
     // mouth
     px(6, 10, N), px(9, 10, N),
-    // neck / body
-    px(3, 12, C, 10, 5),
     // paw hints
     px(2, 14, D, 3, 2), px(11, 14, D, 3, 2),
-    // fluffy tail
-    px(12, 13, C, 3, 3),
+    // fluffy round tail
+    px(13, 12, C, 3, 3), px(14, 11, C, 2, 1),
   ];
 
   return (
@@ -270,10 +295,10 @@ function Rabbit({ state }: { state: PetState }) {
       <Rects cells={body} />
       {!s && (
         <>
-          <rect x={5} y={7} width={2} height={2} fill={O} />
-          <rect x={9} y={7} width={2} height={2} fill={O} />
+          <rect x={5} y={7} width={3} height={3} fill={O} />
+          <rect x={8} y={7} width={3} height={3} fill={O} />
           <rect x={6} y={7} width={1} height={1} fill="white" />
-          <rect x={10} y={7} width={1} height={1} fill="white" />
+          <rect x={9} y={7} width={1} height={1} fill="white" />
         </>
       )}
       {s && (
@@ -282,38 +307,43 @@ function Rabbit({ state }: { state: PetState }) {
           <rect x={8} y={8} width={4} height={1} fill={O} />
         </>
       )}
-      {s && <ZZZ x={13} y={4} />}
+      {s && <ZZZ x={13} y={3} />}
       {state === "dancing" && <Notes x={13} y={4} />}
     </g>
   );
 }
 
-// ─── SHARK 🦈 ─────────────────────────────────────────────────────────────────
+// ─── SHARK 🦈 (blaugrau, von der Seite, Flosse oben, leicht lächelnd) ──────────
 function Shark({ state }: { state: PetState }) {
   const s = state === "sleeping";
-  const C = "#4A90C0", D = "#2C608A", W = "#F0F4F8", O = "#1A1010";
+  const C = "#6BA3C8", D = "#3A6A90", W = "#EEF4F8", O = "#1A1010";
 
   const body: R[] = [
-    // dorsal fin
-    px(6, 0, C), px(6, 1, C), px(7, 1, C), px(5, 2, C), px(6, 2, C),
-    px(7, 2, C), px(8, 2, C), px(5, 3, C), px(6, 3, C), px(7, 3, C), px(8, 3, C), px(9, 3, C),
-    // main body (torpedo)
-    px(1, 4, C, 14, 4), px(0, 5, C, 16, 2), px(1, 8, C, 14, 3),
-    // white belly
-    px(3, 5, W, 10, 4),
-    // left pectoral fin
-    px(0, 6, D, 2, 3),
-    // right pectoral fin
-    px(14, 6, D, 2, 3),
-    // tail fin (right)
-    px(14, 4, D, 2, 1), px(15, 5, D, 1, 3), px(14, 8, D, 2, 1),
-    // darker back
-    px(1, 4, D, 14, 1),
-    // teeth
-    px(3, 9, W), px(5, 9, W), px(7, 9, W), px(9, 9, W), px(11, 9, W),
-    px(4, 10, W), px(6, 10, W), px(8, 10, W), px(10, 10, W),
+    // dorsal fin (tall)
+    px(7, 0, D), px(7, 1, D), px(8, 1, D),
+    px(6, 2, C), px(7, 2, C), px(8, 2, C), px(9, 2, C),
+    px(5, 3, C), px(6, 3, C), px(7, 3, C), px(8, 3, C), px(9, 3, C), px(10, 3, C),
+    // snout (left, pointed)
+    px(0, 6, C), px(0, 7, C), px(1, 5, C), px(1, 8, C),
+    // main torpedo body
+    px(1, 4, C, 13, 1),
+    px(1, 5, C, 14, 6),
+    px(1, 11, C, 13, 1),
+    // lighter belly
+    px(2, 6, W, 9, 4),
+    // tail fork (right)
+    px(14, 3, D, 2, 2), px(14, 9, D, 2, 2),
+    px(15, 5, D, 1, 4),
+    // pectoral fin (bottom)
+    px(5, 11, D, 4, 2),
+    // darker top stripe
+    px(1, 4, D, 13, 1), px(1, 5, D, 3, 1), px(10, 5, D, 4, 1),
+    // smile teeth
+    px(2, 9, W), px(4, 9, W), px(6, 9, W), px(8, 9, W),
     // mouth line
-    px(2, 9, D, 12, 1),
+    px(1, 9, D, 10, 1),
+    // slight smile curve
+    px(2, 10, D), px(9, 10, D),
   ];
 
   return (
@@ -321,12 +351,13 @@ function Shark({ state }: { state: PetState }) {
       <Rects cells={body} />
       {!s && (
         <>
-          <rect x={4} y={6} width={2} height={2} fill={O} />
-          <rect x={5} y={6} width={1} height={1} fill="white" />
+          {/* small eye */}
+          <rect x={3} y={6} width={2} height={2} fill={O} />
+          <rect x={4} y={6} width={1} height={1} fill={W} />
         </>
       )}
-      {s && <rect x={3} y={7} width={4} height={1} fill={O} />}
-      {s && <ZZZ x={8} y={1} />}
+      {s && <rect x={2} y={7} width={3} height={1} fill={O} />}
+      {s && <ZZZ x={9} y={1} />}
       {state === "dancing" && <Notes x={10} y={2} />}
     </g>
   );

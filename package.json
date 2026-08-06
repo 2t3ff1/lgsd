@@ -1,6 +1,6 @@
 {
   "name": "lgsd",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "lint": "next lint",
     "electron:dev": "concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:download": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electron/install.js",
-    "electron:build": "cross-env ELECTRON_BUILD=true next build && electron-builder",
+    "electron:build": "npm version patch --no-git-tag-version && node scripts/generate-icon.js && cross-env ELECTRON_BUILD=true next build && electron-builder",
     "electron:dist": "electron-builder"
   },
   "dependencies": {
@@ -30,7 +30,70 @@
     "server-only": "^0.0.1",
     "web-push": "^3.6.7"
   },
+  "build": {
+    "appId": "com.lgsd.app",
+    "productName": "Let's Get Shit Done",
+    "copyright": "Copyright © 2024",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "app"
+      },
+      {
+        "from": ".next/static",
+        "to": "app/.next/static"
+      },
+      {
+        "from": "public",
+        "to": "app/public"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "2t3ff1",
+      "repo": "lgsd"
+    }
+  },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20",
     "@types/react": "^18",
@@ -42,6 +105,7 @@
     "electron-builder": "^24.13.3",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
+    "png-to-ico": "^3.0.2",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",

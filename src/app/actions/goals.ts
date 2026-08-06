@@ -85,8 +85,13 @@ export async function deleteWeeklyGoal(workspaceId: string, goalId: string) {
 
 export async function updateGoalProgress(workspaceId: string, goalId: string, progress: number) {
   const supabase = createClient();
-  await supabase.from("weekly_goals").update({ progress: Math.max(0, Math.min(100, progress)) }).eq("id", goalId);
+  const { error } = await supabase
+    .from("weekly_goals")
+    .update({ progress: Math.max(0, Math.min(100, progress)) })
+    .eq("id", goalId);
+  if (error) return { error: "Fortschritt konnte nicht gespeichert werden." };
   revalidatePath(`/workspace/${workspaceId}`);
+  return { success: true };
 }
 
 export async function completeWeeklyGoal(workspaceId: string, goalId: string) {

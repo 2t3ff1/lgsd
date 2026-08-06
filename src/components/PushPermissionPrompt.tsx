@@ -25,9 +25,12 @@ export function PushPermissionPrompt() {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) return;
     if (localStorage.getItem(STORAGE_KEY)) return;
+    // Show if permission not yet decided
     if (Notification.permission !== "default") return;
 
-    setVisible(true);
+    // Small delay so the page is fully loaded
+    const t = setTimeout(() => setVisible(true), 2000);
+    return () => clearTimeout(t);
   }, []);
 
   async function handleAllow() {
