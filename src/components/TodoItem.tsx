@@ -9,6 +9,7 @@ import {
   requestProof,
   requestShift,
   resolveShift,
+  updateTodo,
   uploadProof,
 } from "@/app/actions/todos";
 import { toggleReaction } from "@/app/actions/reactions";
@@ -68,6 +69,13 @@ export function TodoItem({
   const [shiftReason, setShiftReason] = useState("");
   const [shiftError, setShiftError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTitle, setEditTitle] = useState(todo.title);
+  const [editDate, setEditDate] = useState(todo.date);
+  const [editTime, setEditTime] = useState(todo.scheduled_time?.slice(0, 5) ?? "");
+  const [editPoints, setEditPoints] = useState(todo.suggested_points);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const [confirmDialog, setConfirmDialog] = useState<"normal" | "retro" | null>(null);
   const [selectedPoints, setSelectedPoints] = useState(todo.suggested_points);
@@ -188,6 +196,23 @@ export function TodoItem({
     });
   }
 
+  function handleEdit() {
+    setEditError(null);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.append("title", editTitle.trim());
+      fd.append("date", editDate);
+      fd.append("suggested_points", String(editPoints));
+      if (editTime) fd.append("scheduled_time", editTime);
+      const res = await updateTodo(workspaceId, todo.id, fd);
+      if (res?.error) {
+        setEditError(res.error);
+      } else {
+        setShowEditModal(false);
+      }
+    });
+  }
+
   const isPendingForOthers = todo.status === "pending" && !isOwn;
   const shiftLimitReached = todo.shift_count >= 3;
   const shiftPending = todo.shift_request_status === "pending";
@@ -238,6 +263,15 @@ export function TodoItem({
         </div>
         {canDelete && (
           <div className="flex shrink-0 items-center gap-1">
+            {isOwn && todo.status === "open" && (
+              <button
+                onClick={() => { setEditTitle(todo.title); setEditDate(todo.date); setEditTime(todo.scheduled_time?.slice(0,5) ?? ""); setEditPoints(todo.suggested_points); setShowEditModal(true); }}
+                className="text-xs text-ink-light hover:text-primary-600"
+                title="Bearbeiten"
+              >
+                ✏️
+              </button>
+            )}
             <button
               onClick={() => setShowDeleteDialog(true)}
               className="text-xs text-ink-light hover:text-danger-500"
@@ -454,6 +488,16 @@ export function TodoItem({
         </div>
       )}
 
+      {/* Eigene Aufgabe: verpasste Aufgabe von gestern nachträglich abhaken */}
+      {!hasSubtasks && isOwn && todo.status === "missed" && todo.date >= new Date(Date.now() - 86400000).toISOString().slice(0, 10) && (
+        <div className="space-y-1 pt-1">
+          <p className="text-xs text-amber-700 dark:text-amber-400">⏰ Nachgeholt? Du kannst diese Aufgabe noch heute Abend abhaken.</p>
+          <Button size="sm" variant="outline" onClick={handleMarkDone} disabled={pending} className="w-full border-amber-400 text-amber-700 hover:bg-amber-50 dark:text-amber-400">
+            ↩ Nachträglich erledigt
+          </Button>
+        </div>
+      )}
+
       {/* Eigene Aufgabe: als erledigt markieren (nicht bei Unteraufgaben - Status folgt aus diesen) */}
       {!hasSubtasks && isOwn && todo.status === "open" && (
         <div className="space-y-2 pt-1">
@@ -654,6 +698,69 @@ export function TodoItem({
         onConfirm={handleDeleteForever}
         onCancel={() => setShowDeleteForeverDialog(false)}
       />
+
+      <ConfirmDialog
+        open={showEditModal}
+        title="Aufgabe bearbeiten"
+        description=""
+        confirmLabel="Speichern"
+        confirmVariant="primary"
+        loading={pending}
+        onConfirm={handleEdit}
+        onCancel={() => setShowEditModal(false)}
+      >
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor={`edit-title-${todo.id}`}>Titel</Label>
+            <Input
+              id={`edit-title-${todo.id}`}
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Label htmlFor={`edit-date-${todo.id}`}>Datum</Label>
+              <Input
+                id={`edit-date-${todo.id}`}
+                type="date"
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+              />
+            </div>
+            <div className="flex-1">
+              <Label htmlFor={`edit-time-${todo.id}`}>Uhrzeit</Label>
+              <Input
+                id={`edit-time-${todo.id}`}
+                type="time"
+                value={editTime}
+                onChange={(e) => setEditTime(e.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Punktevorschlag</Label>
+            <div className="flex gap-1.5">
+              {POINT_OPTIONS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setEditPoints(p)}
+                  className={cn(
+                    "flex-1 rounded-xl border-2 px-2 py-1.5 text-center text-sm font-semibold transition-colors",
+                    editPoints === p
+                      ? "border-primary-400 bg-primary-100 text-primary-700 dark:bg-primary-500/20"
+                      : "border-border-subtle bg-surface"
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+          {editError && <p className="text-sm font-medium text-danger-600">{editError}</p>}
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

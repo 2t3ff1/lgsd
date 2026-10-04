@@ -9,11 +9,15 @@ import type { PetType, PetState } from "@/components/pet/Animals";
 const INACTIVITY_MS = 10 * 60 * 1000;
 const DANCE_MS = 4000;
 const DEFAULT_PET: PetType = "cat";
-const PET_W = 104;
-const PET_H = 148; // taller to avoid clipping animations and other-pets row
 const DRAG_THRESHOLD = 4;
-const OTHER_PET_SIZE = 28;
-const OTHER_PET_GAP = 4;
+
+// Window sizing
+const PET_SIZE = 56;         // own pet SVG size
+const SLOT_W = 80;           // own pet slot width
+const OTHER_W = 56;          // name chip width for other active users
+const SLOT_GAP = 6;          // gap between slots
+const WIN_PAD_H = 16;        // left+right padding inside window
+const WIN_H = 130;           // fixed height
 
 type PresenceRow = {
   user_id: string;
@@ -31,7 +35,7 @@ export default function PetPage() {
   const [toggling, setToggling] = useState(false);
   const [userName, setUserName] = useState("");
   const [isElectron, setIsElectron] = useState(false);
-  const [windowW, setWindowW] = useState(PET_W);
+  const [windowW, setWindowW] = useState(SLOT_W + WIN_PAD_H);
 
   const lastActivityRef = useRef(Date.now());
   const dancingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,15 +56,14 @@ export default function PetPage() {
     setIsElectron(typeof window.electronPet !== "undefined");
   }, []);
 
-  // Resize window to fit other pets side-by-side
+  // Resize window whenever active user count changes
   useEffect(() => {
     if (!isElectron) return;
-    const count = otherPets.length;
-    // extra width needed for the other-pets row
-    const rowW = count > 0 ? count * OTHER_PET_SIZE + (count - 1) * OTHER_PET_GAP + 8 : 0;
-    const needed = Math.max(PET_W, rowW);
-    setWindowW(needed);
-    window.electronPet!.resize(needed, PET_H);
+    const others = otherPets.length;
+    // own slot + other name chips
+    const w = SLOT_W + (others > 0 ? SLOT_GAP + others * OTHER_W + (others - 1) * SLOT_GAP : 0) + WIN_PAD_H;
+    setWindowW(w);
+    window.electronPet!.resize(w, WIN_H);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otherPets.length, isElectron]);
 
@@ -289,97 +292,102 @@ export default function PetPage() {
     }
   }
 
+  // Reusable label style
+  const labelStyle: React.CSSProperties = {
+    fontSize: 9,
+    color: "rgba(255,255,255,0.75)",
+    marginTop: 1,
+    fontWeight: 700,
+    letterSpacing: 0.3,
+    width: SLOT_W,
+    textAlign: "center",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+
   return (
+    // Outer wrapper — matches the Electron window exactly
     <div
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
       style={{
         width: isElectron ? windowW : 380,
-        minHeight: isElectron ? PET_H : 500,
+        height: isElectron ? WIN_H : undefined,
+        minHeight: isElectron ? WIN_H : 500,
         background: "transparent",
         display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "flex-end",
+        flexDirection: "row",        // ← single horizontal row
+        alignItems: "flex-end",      // all pets sit on the same baseline
+        justifyContent: "center",
+        gap: SLOT_GAP,
+        paddingBottom: 8,
+        paddingTop: 14,              // headroom for dance animation going upward
         fontFamily: "system-ui, sans-serif",
-        paddingBottom: 6,
         overflow: "visible",
+        cursor: "grab",
+        userSelect: "none",
+        boxSizing: "border-box",
       }}
     >
-      {/* other active pets — horizontal row above own pet */}
-      {otherPets.length > 0 && (
-        <div style={{
-          display: "flex",
-          flexDirection: "row",
-          flexWrap: "nowrap",
-          gap: OTHER_PET_GAP,
-          marginBottom: 4,
-          justifyContent: "center",
-          alignItems: "flex-end",
-          overflow: "visible",
-        }}>
-          {otherPets.slice(0, 5).map((p) => (
-            <div key={p.user_id} style={{ display: "flex", flexDirection: "column", alignItems: "center", overflow: "visible" }}>
-              <PetAnimal type={(p.pet_type ?? "cat") as PetType} state="active" size={OTHER_PET_SIZE} />
-              {p.display_name && (
-                <span style={{ fontSize: 7, color: "rgba(255,255,255,0.6)", marginTop: 1, maxWidth: OTHER_PET_SIZE + 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {p.display_name}
-                </span>
-              )}
-            </div>
-          ))}
+      {/* ── Other active members — name chips only ───────────────────────── */}
+      {otherPets.slice(0, 5).map((p) => (
+        <div
+          key={p.user_id}
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            width: OTHER_W,
+            paddingBottom: 8,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              color: "rgba(255,255,255,0.85)",
+              background: "rgba(255,255,255,0.12)",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+              borderRadius: 20,
+              padding: "2px 6px",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: OTHER_W,
+              letterSpacing: 0.2,
+            }}
+          >
+            🟢 {p.display_name ?? ""}
+          </span>
         </div>
-      )}
+      ))}
 
-      {/* pet + controls — drag from anywhere except the working button */}
-      <div
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          cursor: "grab",
-          userSelect: "none",
-          paddingBottom: 4,
-          overflow: "visible",
-        }}
-      >
-        <PetAnimal type={petType} state={petState} size={56} />
-
-        {userName && (
-          <div style={{
-            fontSize: 9,
-            color: "rgba(255,255,255,0.75)",
-            marginTop: 1,
-            fontWeight: 700,
-            letterSpacing: 0.3,
-            maxWidth: 90,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}>
-            {userName}
-          </div>
-        )}
-
+      {/* ── Own pet ───────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: SLOT_W, overflow: "visible" }}>
+        <PetAnimal type={petType} state={petState} size={PET_SIZE} />
+        <div style={labelStyle}>{userName}</div>
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={handleToggleWorking}
           disabled={toggling}
           style={{
-            marginTop: 4,
-            padding: "2px 10px",
+            marginTop: 3,
+            padding: "2px 8px",
             borderRadius: 20,
             border: "none",
             background: isWorking ? "rgba(34,197,94,0.85)" : "rgba(255,255,255,0.14)",
             color: "white",
-            fontSize: 10,
+            fontSize: 9,
             fontWeight: 700,
             cursor: toggling ? "default" : "pointer",
             backdropFilter: "blur(8px)",
             WebkitBackdropFilter: "blur(8px)",
             transition: "background 0.2s",
             letterSpacing: 0.2,
+            whiteSpace: "nowrap",
           } as React.CSSProperties}
         >
           {isWorking ? "✅ aktiv" : "☕ los"}

@@ -191,20 +191,23 @@ function clampToWorkArea(x, y, w, h) {
   };
 }
 
+const PET_INIT_W = 96;   // 1 pet: SLOT_W(80) + GAP(0) + PAD(16)
+const PET_INIT_H = 130;  // must match WIN_H in pet/page.tsx
+
 function createPetWindow(baseUrl) {
   const saved = loadPetPosition();
   const { width: sw, height: sh } = require("electron").screen.getPrimaryDisplay().workAreaSize;
-  let x = sw - 200;
-  let y = sh - 260;
+  let x = sw - PET_INIT_W - 16;
+  let y = sh - PET_INIT_H - 8;
   if (saved) {
-    const clamped = clampToWorkArea(saved.x, saved.y, 104, 120);
+    const clamped = clampToWorkArea(saved.x, saved.y, PET_INIT_W, PET_INIT_H);
     x = clamped.x;
     y = clamped.y;
   }
 
   petWindow = new BrowserWindow({
-    width: 104,
-    height: 120,
+    width: PET_INIT_W,
+    height: PET_INIT_H,
     x,
     y,
     transparent: true,
@@ -370,13 +373,21 @@ function setupIPC() {
   ipcMain.handle("pet:resize", (_, { w, h }) => {
     if (!petWindow) return;
     const [x, y] = petWindow.getPosition();
-    const screen = require("electron").screen;
-    const display = screen.getDisplayNearestPoint({ x, y });
-    const { height: sh } = display.workArea;
-    // Keep bottom-anchored: resize upward
-    const newY = Math.max(display.workArea.y, y - (h - petWindow.getSize()[1]));
+    const [oldW, oldH] = petWindow.getSize();
+    const { screen } = require("electron");
+    const display = screen.getDisplayNearestPoint({ x: x + Math.floor(oldW / 2), y });
+    const wa = display.workArea;
+    // Keep horizontal center fixed, grow/shrink to both sides
+    const centerX = x + Math.floor(oldW / 2);
+    let newX = centerX - Math.floor(w / 2);
+    // Keep bottom edge fixed, grow upward
+    const bottomY = y + oldH;
+    let newY = bottomY - h;
+    // Clamp within work area
+    newX = Math.max(wa.x, Math.min(wa.x + wa.width - w, newX));
+    newY = Math.max(wa.y, newY);
     petWindow.setSize(w, h);
-    petWindow.setPosition(x, newY);
+    petWindow.setPosition(newX, newY);
   });
 }
 

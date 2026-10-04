@@ -17,6 +17,32 @@ function urlBase64ToUint8Array(base64String: string) {
   return output;
 }
 
+async function subscribeUser(): Promise<{ success: boolean; error?: string }> {
+  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!vapidKey) return { success: false, error: "VAPID-Key fehlt (Vercel Env)" };
+
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return { success: false, error: "Browser unterstützt kein Push" };
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return { success: false, error: "Berechtigung abgelehnt" };
+
+  try {
+    const registration = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    });
+    const res = await savePushSubscription(subscription.toJSON());
+    if (res && "error" in res) return { success: false, error: res.error };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
 export function PushPermissionPrompt() {
   const [visible, setVisible] = useState(false);
 
@@ -25,10 +51,8 @@ export function PushPermissionPrompt() {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) return;
     if (localStorage.getItem(STORAGE_KEY)) return;
-    // Show if permission not yet decided
     if (Notification.permission !== "default") return;
 
-    // Small delay so the page is fully loaded
     const t = setTimeout(() => setVisible(true), 2000);
     return () => clearTimeout(t);
   }, []);
@@ -36,21 +60,7 @@ export function PushPermissionPrompt() {
   async function handleAllow() {
     localStorage.setItem(STORAGE_KEY, "1");
     setVisible(false);
-
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") return;
-
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
-      });
-
-      await savePushSubscription(subscription.toJSON());
-    } catch {
-      // Push-Setup fehlgeschlagen, App funktioniert weiter mit In-App-Meldungen
-    }
+    await subscribeUser();
   }
 
   function handleDismiss() {
@@ -73,6 +83,85 @@ export function PushPermissionPrompt() {
           Nicht jetzt
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Push-Einstellungen für die Profilseite */
+export function PushSettings() {
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const [permission, setPermission] = useState<NotificationPermission | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setPermission(Notification.permission);
+    }
+  }, []);
+
+  async function handleEnable() {
+    setStatus("loading");
+    const res = await subscribeUser();
+    if (res.success) {
+      setStatus("success");
+      setMessage("Push aktiviert! Schick dir einen Test.");
+      setPermission("granted");
+      localStorage.removeItem("lgsd-push-prompted");
+    } else {
+      setStatus("error");
+      setMessage(res.error ?? "Fehler");
+    }
+  }
+
+  async function handleTest() {
+    setStatus("loading");
+    try {
+      const res = await fetch("/api/push/test", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setStatus("success");
+        setMessage("Test-Push gesendet! Siehst du die Benachrichtigung?");
+      } else {
+        setStatus("error");
+        setMessage(data.error ?? "Fehlgeschlagen");
+      }
+    } catch (e) {
+      setStatus("error");
+      setMessage(String(e));
+    }
+  }
+
+  if (!("PushManager" in (typeof window !== "undefined" ? window : {}))) {
+    return <p className="text-xs text-ink-light">Push wird in diesem Browser nicht unterstützt.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-ink-light">
+        Status: <strong>{permission === "granted" ? "✅ Erlaubt" : permission === "denied" ? "❌ Blockiert" : "⏳ Nicht entschieden"}</strong>
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {permission !== "granted" && (
+          <Button size="sm" onClick={handleEnable} disabled={status === "loading"}>
+            🔔 Push aktivieren
+          </Button>
+        )}
+        {permission === "granted" && (
+          <>
+            <Button size="sm" variant="outline" onClick={handleEnable} disabled={status === "loading"}>
+              🔄 Neu abonnieren
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleTest} disabled={status === "loading"}>
+              🧪 Test-Push senden
+            </Button>
+          </>
+        )}
+      </div>
+      {message && (
+        <p className={`text-xs font-medium ${status === "success" ? "text-success-600" : "text-danger-600"}`}>
+          {message}
+        </p>
+      )}
     </div>
   );
 }

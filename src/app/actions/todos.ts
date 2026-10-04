@@ -226,6 +226,59 @@ export async function confirmTodo(
   return { success: true };
 }
 
+export async function updateTodo(workspaceId: string, todoId: string, formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const title = String(formData.get("title") ?? "").trim();
+  const date = String(formData.get("date") ?? "").trim();
+  const suggestedPoints = Number(formData.get("suggested_points") ?? 5);
+  const scheduledTime = String(formData.get("scheduled_time") ?? "").trim() || null;
+  const isRecurring = formData.get("is_recurring") === "on";
+  const recurrenceType = String(formData.get("recurrence_type") ?? "");
+  const recurrenceIntervalRaw = String(formData.get("recurrence_interval") ?? "").trim();
+  const recurrenceInterval =
+    isRecurring && recurrenceType === "interval" && recurrenceIntervalRaw
+      ? Math.max(1, Number(recurrenceIntervalRaw))
+      : null;
+  const recurrenceDays = isRecurring && recurrenceType === "weekdays"
+    ? formData.getAll("recurrence_days").map((d) => Number(d))
+    : null;
+
+  if (!title) return { error: "Bitte einen Titel angeben." };
+  if (!date) return { error: "Bitte ein Datum angeben." };
+  if (!POINT_OPTIONS.includes(suggestedPoints as (typeof POINT_OPTIONS)[number])) {
+    return { error: "Ungültiger Punktevorschlag." };
+  }
+
+  const dbRecurrenceType =
+    isRecurring && recurrenceType && recurrenceType !== "interval" && recurrenceType !== "weekdays"
+      ? (recurrenceType as RecurrenceType)
+      : null;
+
+  const { error } = await supabase
+    .from("todos")
+    .update({
+      title,
+      date,
+      suggested_points: suggestedPoints,
+      scheduled_time: scheduledTime,
+      is_recurring: isRecurring,
+      recurrence_type: dbRecurrenceType,
+      recurrence_interval: recurrenceInterval,
+      recurrence_days: recurrenceDays,
+    })
+    .eq("id", todoId)
+    .eq("user_id", user.id);
+
+  if (error) return { error: "Aufgabe konnte nicht gespeichert werden." };
+  revalidatePath(`/workspace/${workspaceId}`);
+  return { success: true };
+}
+
 export async function requestShift(
   workspaceId: string,
   todoId: string,

@@ -9,6 +9,7 @@ import { MonthlyGoalForm } from "@/components/MonthlyGoalForm";
 import { ReminderTimeForm } from "@/components/ReminderTimeForm";
 import { CommitmentReminderForm } from "@/components/CommitmentReminderForm";
 import { AppearanceForm } from "@/components/AppearanceForm";
+import { PushSettings } from "@/components/PushPermissionPrompt";
 import { PetSelector } from "@/components/PetSelector";
 import { UserBackground } from "@/components/UserBackground";
 import { TodoHistory, type HistoryTodo } from "@/components/TodoHistory";
@@ -155,6 +156,11 @@ export default async function ProfilePage() {
             <AppearanceForm profile={profile} />
           </Card>
         )}
+
+        <Card className="rounded-2xl">
+          <h2 className="mb-3 font-bold">Push-Benachrichtigungen</h2>
+          <PushSettings />
+        </Card>
 
         <Card className="rounded-2xl">
           <h2 className="mb-1 font-bold">Monatsziele</h2>
